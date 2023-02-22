@@ -148,6 +148,8 @@ namespace pl::core::ast {
             return patterns;
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
         void addAttribute(std::unique_ptr<ASTNodeAttribute> &&attribute) override {
             if (this->isValid()) {
                 if (auto attributable = dynamic_cast<Attributable *>(this->getType().get()); attributable != nullptr) {

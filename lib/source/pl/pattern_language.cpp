@@ -129,6 +129,15 @@ namespace pl {
             return false;
         }
 
+        auto *bytecode = new core::instr::Bytecode();
+        auto mainEmitter = bytecode->function(core::instr::main_name);
+
+        for (const auto &item: this->m_currAST) {
+            item->emit(*bytecode, mainEmitter);
+        }
+
+        evaluator->getConsole().log(core::LogConsole::Level::Info, bytecode->toString());
+
         auto returnCode = evaluator->getMainResult().value_or(0).toSigned();
         evaluator->getConsole().log(core::LogConsole::Level::Info, fmt::format("Pattern exited with code: {}", returnCode));
 

@@ -4,6 +4,7 @@
 #include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 #include <pl/core/errors/evaluator_errors.hpp>
+#include <pl/core/bytecode/bytecode.hpp>
 
 #include <pl/helpers/utils.hpp>
 #include <pl/helpers/concepts.hpp>
@@ -47,6 +48,11 @@ namespace pl::core::ast {
             evaluator->updateRuntime(this);
 
             err::E0001.throwError("Cannot execute non-functional statement.", "This is a evaluator bug!", this);
+        }
+
+        virtual void emit(instr::Bytecode& bytecode, instr::BytecodeEmitter& emitter) {
+            hlp::unused(bytecode, emitter);
+            err::E0001.throwError("Non implemented instr emitter.", "This is a evaluator bug!", this);
         }
 
         void setDocComment(const std::string &comment) {

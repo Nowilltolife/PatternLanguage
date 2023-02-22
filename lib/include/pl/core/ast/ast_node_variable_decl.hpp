@@ -132,6 +132,8 @@ namespace pl::core::ast {
             return std::nullopt;
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
         [[nodiscard]] bool isConstant() const {
             return this->m_constant;
         }

@@ -82,6 +82,8 @@ namespace pl::core::ast {
             return hlp::moveToVector<std::shared_ptr<ptrn::Pattern>>(std::move(pattern));
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
         [[nodiscard]] const std::vector<std::shared_ptr<ASTNode>> &getMembers() const { return this->m_members; }
         void addMember(std::shared_ptr<ASTNode> &&node) { this->m_members.push_back(std::move(node)); }
 
