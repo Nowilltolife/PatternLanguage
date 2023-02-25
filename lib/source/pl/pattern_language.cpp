@@ -6,6 +6,7 @@
 #include <pl/core/validator.hpp>
 #include <pl/core/evaluator.hpp>
 #include <pl/core/errors/error.hpp>
+#include <pl/core/vm/vm.hpp>
 
 #include <pl/lib/std/libstd.hpp>
 

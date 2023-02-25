@@ -215,7 +215,7 @@ namespace pl::core::instr {
     public:
 
         struct Function {
-            std::string name;
+            u16 name;
             std::vector<Instruction*>* instructions;
         };
 
@@ -233,18 +233,18 @@ namespace pl::core::instr {
 
         [[nodiscard]] BytecodeEmitter function(const std::string& name) {
             auto instructions = new std::vector<Instruction*>();
-            m_functions.push_back({name, instructions});
+            m_functions.push_back({m_symbolTable.newString(name), instructions});
             return {m_symbolTable, instructions};
         }
 
-        [[nodiscard]] SymbolTable &getSymbolTable() {
+        [[nodiscard]] const SymbolTable &getSymbolTable() {
             return m_symbolTable;
         }
 
         std::string toString() const {
             std::string ss;
             for (auto& function : m_functions) {
-                ss += "function " + function.name + " {\n";
+                ss += "function " + m_symbolTable.getSymbol(function.name)->toString() + " {\n";
                 for (auto& instruction : *function.instructions) {
                     ss += "    " + std::string(opcodeNames[instruction->opcode]) + " ";
                     switch (instruction->opcode) {
@@ -260,18 +260,16 @@ namespace pl::core::instr {
                         case LOAD_FROM_THIS:
                         case CALL: {
                             u16 index = static_cast<IntOpInstruction *>(instruction)->value;
-                            Symbol *symbol = m_symbolTable.getSymbol(index);
-                            ss += '#' + std::to_string(index) + " (" + symbol->toString() + ")";
+                            ss += '#' + std::to_string(index) + " (" + m_symbolTable.getSymbol(index)->toString() + ")";
                             break;
                         }
                         case READ_FIELD: {
                             u16 index1 = static_cast<BiIntOpInstruction *>(instruction)->value1;
                             u16 typeIndex = static_cast<BiIntOpInstruction *>(instruction)->value2;
-                            Symbol *symbol1 = m_symbolTable.getSymbol(index1);
 
                             auto t = static_cast<Token::ValueType>(typeIndex);
 
-                            ss += '#' + std::to_string(index1) + " (" + symbol1->toString() + "), ";
+                            ss += '#' + std::to_string(index1) + " (" +  m_symbolTable.getSymbol(index1)->toString() + "), ";
                             ss += std::to_string(typeIndex) + " (" + Token::getTypeName(t) + ")";
                             break;
                         }
