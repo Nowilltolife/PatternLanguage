@@ -198,17 +198,6 @@ namespace pl::ptrn {
                 return *this->m_cachedDisplayValue;
 
             try {
-                auto &currOffset = this->m_evaluator->dataOffset();
-                auto startOffset = currOffset;
-                currOffset = this->getOffset();
-
-                auto savedScope = this->m_evaluator->getScope(0);
-
-                ON_SCOPE_EXIT {
-                    this->m_evaluator->getScope(0) = savedScope;
-                    currOffset = startOffset;
-                };
-
                 return this->formatDisplayValue();
             } catch(std::exception &e) {
                 this->m_cachedDisplayValue = std::make_unique<std::string>(e.what());
@@ -384,6 +373,10 @@ namespace pl::ptrn {
                 this->getEvaluator()->writeData(this->getOffset(), result.data(), result.size(), this->getSection());
                 this->clearFormatCache();
             }
+        }
+
+        void setEvaluator(core::Evaluator *evaluator) {
+            this->m_evaluator = evaluator;
         }
 
         void clearFormatCache() {

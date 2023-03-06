@@ -14,9 +14,11 @@ namespace pl::ptrn {
         }
 
         [[nodiscard]] core::Token::Literal getValue() const override {
-            u128 data = 0;
-            this->getEvaluator()->readData(this->getOffset(), &data, this->getSize(), this->getSection());
-            return transformValue(hlp::changeEndianess(data, this->getSize(), this->getEndian()));
+            return transformValue(data);
+        }
+
+        void setData(u128 d) {
+            this->data = d;
         }
 
         [[nodiscard]] std::string getFormattedName() const override {
@@ -30,7 +32,6 @@ namespace pl::ptrn {
         }
 
         std::string formatDisplayValue() override {
-            auto data = this->getValue().toUnsigned();
             return Pattern::formatDisplayValue(fmt::format("{:d} (0x{:0{}X})", data, data, this->getSize() * 2), this->getValue());
         }
 
@@ -40,6 +41,8 @@ namespace pl::ptrn {
 
             return Pattern::formatDisplayValue(result, value);
         }
+    private:
+        u128 data = 0;
     };
 
 }

@@ -80,6 +80,7 @@ namespace pl {
     }
 
     bool PatternLanguage::executeString(std::string code, const std::map<std::string, core::Token::Literal> &envVars, const std::map<std::string, core::Token::Literal> &inVariables, bool checkResult) {
+        hlp::unused(checkResult);
         auto startTime = std::chrono::high_resolution_clock::now();
         ON_SCOPE_EXIT {
             auto endTime = std::chrono::high_resolution_clock::now();
@@ -124,32 +125,37 @@ namespace pl {
 
         evaluator->dataOffset() = this->m_startAddress.value_or(evaluator->getDataBaseAddress());
 
-
-        if (!evaluator->evaluate(code, this->m_currAST)) {
-            this->m_currError = evaluator->getConsole().getLastHardError();
-            return false;
-        }
-
-        auto *bytecode = new core::instr::Bytecode();
+        auto bytecode = new core::instr::Bytecode();
         auto mainEmitter = bytecode->function(core::instr::main_name);
 
+        auto compileStart = std::chrono::high_resolution_clock::now();
         for (const auto &item: this->m_currAST) {
             item->emit(*bytecode, mainEmitter);
         }
+        auto compileEnd = std::chrono::high_resolution_clock::now();
+        mainEmitter.return_();
 
         evaluator->getConsole().log(core::LogConsole::Level::Info, bytecode->toString());
 
-        auto returnCode = evaluator->getMainResult().value_or(0).toSigned();
-        evaluator->getConsole().log(core::LogConsole::Level::Info, fmt::format("Pattern exited with code: {}", returnCode));
+        auto vm = core::vm::VirtualMachine();
+        vm.setIOOperations({
+            .read = [this](u64 addr, u8* buf, size_t size) {
+                this->m_internals.evaluator->readData(addr, buf, size, 0);
+            },.write = [this](u64 addr, u8* buf, size_t size) {
+                this->m_internals.evaluator->writeData(addr, buf, size, 0);
+            }
+        });
+        vm.loadBytecode(*bytecode);
+        auto executionStart = std::chrono::high_resolution_clock::now();
+        vm.executeFunction("<main>");
+        auto executionEnd = std::chrono::high_resolution_clock::now();
+        evaluator->getConsole().log(core::LogConsole::Level::Info, "Execution time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - executionStart).count()) + "s");
+        evaluator->getConsole().log(core::LogConsole::Level::Info, "Compilation time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(compileEnd - compileStart).count()) + "s");
+        evaluator->getConsole().log(core::LogConsole::Level::Info, "Total time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - compileStart).count()) + "s");
 
-        if (checkResult && returnCode != 0) {
-            this->m_currError = core::err::PatternLanguageError(core::err::E0009.format(fmt::format("Pattern exited with non-zero result: {}", returnCode)), 0, 1);
-
-            return false;
-        }
-
-        for (const auto &pattern : evaluator->getPatterns())
+        for (const auto &pattern : vm.getPatterns()) {
             this->m_patterns[pattern->getSection()].push_back(pattern);
+        }
         this->m_patterns.erase(ptrn::Pattern::HeapSectionId);
 
         this->flattenPatterns();

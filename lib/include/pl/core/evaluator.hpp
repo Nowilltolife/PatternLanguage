@@ -270,15 +270,8 @@ namespace pl::core {
         }
 
         [[nodiscard]] std::optional<api::Function> findFunction(const std::string &name) const {
-            const auto &customFunctions     = this->getCustomFunctions();
-            const auto &builtinFunctions    = this->getBuiltinFunctions();
-
-            if (auto customFunction = customFunctions.find(name); customFunction != customFunctions.end())
-                return customFunction->second;
-            else if (auto builtinFunction = builtinFunctions.find(name); builtinFunction != builtinFunctions.end())
-                return builtinFunction->second;
-            else
-                return std::nullopt;
+            hlp::unused(name);
+            return std::nullopt;
         }
 
         [[nodiscard]] std::vector<std::vector<u8>> &getHeap() {
