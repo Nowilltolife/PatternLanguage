@@ -7,6 +7,15 @@
 
 namespace pl::core::vm {
 
+    template<typename T>
+    static std::unique_ptr<T> create(const std::string &typeName, const std::string &varName, auto... args) {
+        auto pattern = std::make_unique<T>(nullptr, args...);
+        pattern->setTypeName(typeName);
+        pattern->setVariableName(varName);
+
+        return std::move(pattern);
+    }
+
     enum ValueType {
         BOOLEAN,
         BYTE,
@@ -25,44 +34,52 @@ namespace pl::core::vm {
         u16 name;
     };
 
-    struct Pattern {
+    struct Object {
         u16 name;
         u16 typeName;
         u64 location;
         u64 section;
+        u32 color;
         std::map<u16, Attribute> attributes;
     };
 
-    struct Field : Pattern {
+    struct Field : Object {
         Value *value{};
     };
 
-    struct Struct : Pattern {
+    struct Struct : Object {
         std::map<u16, Field> fields;
     };
 
     struct Value {
-        u16 size;
-        u8 type;
-        union {
-            bool boolean;
-            u8 byte;
-            u128 unsignedInteger;
-            i128 signedInteger;
-            double scalar;
-            Value *array;
-            Field *field;
-            Struct *structure;
-            Value *pointer;
-        };
+        u16 size{};
+        u128 address{};
+        u64 section{};
+
+        struct : public std::variant<bool, u128, i128, double, Value*, Field*, Struct*> {
+            using variant::variant;
+        } v;
     };
 
     class VirtualMachine {
     public:
-        VirtualMachine();
+
+        struct IOOperations {
+            std::function<void(u64, u8*, size_t)> read;
+            std::function<void(u64, u8*, size_t)> write;
+        };
+
         void run();
         void loadBytecode(instr::Bytecode bytecode);
-        Value* executeFunction(const std::string function);
+        Value* executeFunction(const std::string& function);
+
+        void setIOOperations(const IOOperations& ioOperations) {
+            this->m_io = ioOperations;
+        }
+
+        [[nodiscard]] auto& getPatterns() const {
+            return this->m_patterns;
+        }
 
     private:
         void step();
@@ -72,11 +89,19 @@ namespace pl::core::vm {
         }
         void enterFunction(u32 name);
         void leaveFunction();
+        Value* readStaticValue(u16 type);
 
         struct Frame {
             std::map<u32, Value*> locals;
             std::stack<Value*> stack;
+            std::vector<instr::Instruction>* m_instructions;
             u64 pc;
+
+            ~Frame() {
+                for (auto& [key, value] : this->locals) {
+                    delete value;
+                }
+            }
         };
 
         struct StaticNames {
@@ -94,14 +119,26 @@ namespace pl::core::vm {
             return {};
         }
 
+        std::shared_ptr<ptrn::Pattern> convert(Value* value);
+
+        std::string lookupString(u32 name) {
+            auto symbol = this->m_symbolTable.getSymbol(name);
+            auto stringSymbol = dynamic_cast<instr::StringSymbol*>(symbol);
+            if(stringSymbol == nullptr)
+                return "<invalid>";
+            return stringSymbol->value;
+        }
+
         u64 m_address;
         Frame* m_frame;
         StaticNames m_staticNames;
         std::stack<Frame*> m_frames;
         std::stack<Value*> m_stack;
         instr::SymbolTable m_symbolTable;
-        std::vector<instr::Instruction*> m_instructions;
         std::vector<instr::Bytecode::Function> m_functions;
+        std::vector<std::shared_ptr<ptrn::Pattern>> m_patterns;
+        Value* result;
         bool m_running;
+        IOOperations m_io;
     };
 }
