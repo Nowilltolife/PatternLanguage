@@ -19,15 +19,16 @@ namespace pl::core::instr {
         STORE_ATTRIBUTE,
         STORE_LOCAL,
         LOAD_LOCAL,
-        STORE_GLOBAL,
-        LOAD_GLOBAL,
         NEW_STRUCT,
+        READ_VALUE,
         READ_FIELD,
         CALL,
-        EXPORT
+        EXPORT,
+        DUP,
+        RETURN
     };
 
-    constexpr static const char * const opcodeNames[13] = {
+    constexpr static const char * const opcodeNames[] = {
         "store_field",
         "load_field",
         "store_in_this",
@@ -35,25 +36,18 @@ namespace pl::core::instr {
         "store_attribute",
         "store_local",
         "load_local",
-        "store_global",
-        "load_global",
         "new_struct",
+        "read_value",
         "read_field",
         "call",
-        "export"
+        "export",
+        "dup",
+        "return"
     };
 
     struct Instruction {
         Opcode opcode;
-    };
-
-    struct IntOpInstruction : Instruction {
-        u16 value;
-    };
-
-    struct BiIntOpInstruction : Instruction {
-        u16 value1;
-        u16 value2;
+        std::vector<u16> operands{};
     };
 
     enum SymbolType {
@@ -61,7 +55,7 @@ namespace pl::core::instr {
     };
 
     struct Symbol {
-        u16 type;
+        u16 type{};
 
         virtual ~Symbol() = default;
         [[nodiscard]] virtual std::string toString() const = 0;
@@ -87,7 +81,9 @@ namespace pl::core::instr {
 
     class SymbolTable {
     public:
-        SymbolTable() = default;
+        SymbolTable() : m_symbols() {
+            this->m_symbols.push_back(nullptr); // increase index by 1
+        }
 
         SymbolTable(const SymbolTable &other) = default;
 
@@ -111,7 +107,7 @@ namespace pl::core::instr {
 
         [[nodiscard]] u16 addSymbol(Symbol *symbol) {
             // see if symbol already exists
-            for (u16 i = 0; i < m_symbols.size(); i++) {
+            for (u16 i = 1; i < m_symbols.size(); i++) {
                 if (m_symbols[i]->hash() == symbol->hash()) {
                     delete symbol;
                     return i;
@@ -133,73 +129,91 @@ namespace pl::core::instr {
     class BytecodeEmitter {
     public:
 
-        BytecodeEmitter(SymbolTable& symbolTable, std::vector<Instruction*>* instructions)
+        BytecodeEmitter(SymbolTable& symbolTable, std::vector<Instruction>* instructions)
             : m_symbolTable(symbolTable), m_instructions(instructions) { }
 
-        void store_field(const std::string& name, bool slot0 = false) {
-            auto instruction = new IntOpInstruction {{slot0 ? STORE_IN_THIS : STORE_FIELD}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+        void store_field(const std::string& name, const std::string& typeName, bool slot0 = false) {
+            hlp::unused(this->addInstruction({
+                                                     slot0 ? STORE_IN_THIS : STORE_FIELD,
+                                                     {
+                                                             this->m_symbolTable.newString(name),
+                                                             this->m_symbolTable.newString(typeName)
+                                                     }
+                                             }));
         }
 
         void load_field(const std::string& name, bool slot0 = false) {
-            auto instruction = new IntOpInstruction {{slot0 ? LOAD_FROM_THIS : LOAD_FIELD}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+            hlp::unused(this->addInstruction({
+                                                     slot0 ? LOAD_FROM_THIS : LOAD_FIELD,
+                                                     {
+                                                             this->m_symbolTable.newString(name),
+                                                     }
+                                             }));
         }
 
-        void store_attribute(const std::string& name) {
-            auto instruction = new IntOpInstruction { {STORE_ATTRIBUTE}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
-        }
 
-        void store_local(const std::string& name) {
-            auto instruction = new IntOpInstruction { {STORE_LOCAL}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+        void store_local(const std::string& name, const std::string& typeName) {
+            hlp::unused(this->addInstruction({
+                                                     STORE_LOCAL,
+                                                     {
+                                                             this->m_symbolTable.newString(name),
+                                                             this->m_symbolTable.newString(typeName)
+                                                     }
+                                             }));
         }
 
         void load_local(const std::string& name) {
-            auto instruction = new IntOpInstruction { {LOAD_LOCAL}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+            hlp::unused(this->addInstruction({ LOAD_LOCAL, { this->m_symbolTable.newString(name) } }));
         }
 
-        void store_global(const std::string& name) {
-            auto instruction = new IntOpInstruction { {STORE_GLOBAL}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+        void store_attribute(const std::string& name) {
+            hlp::unused(this->addInstruction({ STORE_ATTRIBUTE, { this->m_symbolTable.newString(name) } }));
         }
 
-        void load_global(const std::string& name) {
-            auto instruction = new IntOpInstruction { {LOAD_GLOBAL}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+        void read_value(u16 type) {
+            hlp::unused(this->addInstruction({ READ_VALUE, { type }}));
         }
 
-        void read_field(const std::string& name, u16 type) {
-            auto instruction = new BiIntOpInstruction { {READ_FIELD}, this->m_symbolTable.newString(name), type };
-            hlp::unused(this->addInstruction(instruction));
+        void read_field(const std::string& name, const std::string& typeName, u16 type) {
+            hlp::unused(this->addInstruction({
+                                                     READ_FIELD,
+                                                     {
+                                                             this->m_symbolTable.newString(name),
+                                                             this->m_symbolTable.newString(typeName),
+                                                             type
+                                                     }
+                                             }));
         }
 
         void new_struct(const std::string& name) {
-            auto instruction = new IntOpInstruction { {NEW_STRUCT}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+            hlp::unused(this->addInstruction({ NEW_STRUCT, { this->m_symbolTable.newString(name) } }));
         }
 
         void call(const std::string& name) {
-            auto instruction = new IntOpInstruction { {CALL}, this->m_symbolTable.newString(name) };
-            hlp::unused(this->addInstruction(instruction));
+            hlp::unused(this->addInstruction({ CALL, { this->m_symbolTable.newString(name) } }));
         }
 
         void export_() {
-            auto instruction = new Instruction { EXPORT };
-            hlp::unused(this->addInstruction(instruction));
+            hlp::unused(this->addInstruction({ EXPORT }));
+        }
+
+        void dup() {
+            hlp::unused(this->addInstruction({ DUP }));
+        }
+
+        void return_() {
+            hlp::unused(this->addInstruction({ RETURN }));
         }
 
         [[nodiscard]]
 
-        u16 addInstruction(Instruction *instruction) {
+        u16 addInstruction(const Instruction& instruction) {
             auto result = m_instructions->size();
             m_instructions->push_back(instruction);
             return result;
         }
 
-        [[nodiscard]] Instruction *getInstruction(u16 index) const {
+        [[nodiscard]] const Instruction& getInstruction(u16 index) const {
             return m_instructions->at(index);
         }
 
@@ -208,7 +222,7 @@ namespace pl::core::instr {
         }
     private:
         SymbolTable& m_symbolTable;
-        std::vector<Instruction*>* m_instructions;
+        std::vector<Instruction>* m_instructions;
     };
 
     class Bytecode {
@@ -216,12 +230,17 @@ namespace pl::core::instr {
 
         struct Function {
             u16 name;
-            std::vector<Instruction*>* instructions;
+            std::vector<Instruction>* instructions;
+        };
+
+        struct StructInfo {
+            u16 name;
+            u64 size; // size of all fields added up
         };
 
         Bytecode() = default;
 
-        Bytecode(const Bytecode &other) = delete;
+        Bytecode(const Bytecode &other) = default;
 
         Bytecode(Bytecode &&other) noexcept = default;
 
@@ -232,7 +251,7 @@ namespace pl::core::instr {
         ~Bytecode() = default;
 
         [[nodiscard]] BytecodeEmitter function(const std::string& name) {
-            auto instructions = new std::vector<Instruction*>();
+            auto instructions = new std::vector<Instruction>();
             m_functions.push_back({m_symbolTable.newString(name), instructions});
             return {m_symbolTable, instructions};
         }
@@ -241,36 +260,50 @@ namespace pl::core::instr {
             return m_symbolTable;
         }
 
+        [[nodiscard]] const std::vector<Function>& getFunctions() const {
+            return m_functions;
+        }
+
         std::string toString() const {
             std::string ss;
             for (auto& function : m_functions) {
                 ss += "function " + m_symbolTable.getSymbol(function.name)->toString() + " {\n";
                 for (auto& instruction : *function.instructions) {
-                    ss += "    " + std::string(opcodeNames[instruction->opcode]) + " ";
-                    switch (instruction->opcode) {
+                    ss += "    " + std::string(opcodeNames[instruction.opcode]) + " ";
+                    switch (instruction.opcode) {
                         case STORE_FIELD:
                         case LOAD_FIELD:
                         case STORE_ATTRIBUTE:
-                        case STORE_LOCAL:
                         case LOAD_LOCAL:
-                        case STORE_GLOBAL:
-                        case LOAD_GLOBAL:
                         case NEW_STRUCT:
-                        case STORE_IN_THIS:
                         case LOAD_FROM_THIS:
                         case CALL: {
-                            u16 index = static_cast<IntOpInstruction *>(instruction)->value;
+                            u16 index = instruction.operands[0];
                             ss += '#' + std::to_string(index) + " (" + m_symbolTable.getSymbol(index)->toString() + ")";
                             break;
                         }
+                        case READ_VALUE: {
+                            auto t = static_cast<Token::ValueType>(instruction.operands[0]);
+
+                            ss += std::to_string(instruction.operands[0]) + " (" + Token::getTypeName(t) + ")";
+                            break;
+                        }
                         case READ_FIELD: {
-                            u16 index1 = static_cast<BiIntOpInstruction *>(instruction)->value1;
-                            u16 typeIndex = static_cast<BiIntOpInstruction *>(instruction)->value2;
+                            u16 index1 = instruction.operands[0];
+                            u16 index2 = instruction.operands[1];
+                            auto t = static_cast<Token::ValueType>(instruction.operands[2]);
 
-                            auto t = static_cast<Token::ValueType>(typeIndex);
-
-                            ss += '#' + std::to_string(index1) + " (" +  m_symbolTable.getSymbol(index1)->toString() + "), ";
-                            ss += std::to_string(typeIndex) + " (" + Token::getTypeName(t) + ")";
+                            ss += '#' + std::to_string(index1) + " (" + m_symbolTable.getSymbol(index1)->toString() + "), ";
+                            ss += '#' + std::to_string(index2) + " (" + m_symbolTable.getSymbol(index2)->toString() + "), ";
+                            ss += std::to_string(instruction.operands[2]) + " (" + Token::getTypeName(t) + ")";
+                            break;
+                        }
+                        case STORE_IN_THIS:
+                        case STORE_LOCAL: {
+                            u16 index1 = instruction.operands[0];
+                            u16 index2 = instruction.operands[1];
+                            ss += '#' + std::to_string(index1) + " (" + m_symbolTable.getSymbol(index1)->toString() + "), ";
+                            ss += '#' + std::to_string(index2) + " (" + m_symbolTable.getSymbol(index2)->toString() + ")";
                             break;
                         }
                         default:
