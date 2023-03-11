@@ -12,37 +12,35 @@ namespace pl::core::instr {
     constexpr static const char * const main_name = "<main>";
 
     enum Opcode {
-        STORE_FIELD,
-        LOAD_FIELD,
-        STORE_IN_THIS,
-        LOAD_FROM_THIS,
-        STORE_ATTRIBUTE,
-        STORE_LOCAL,
-        LOAD_LOCAL,
-        NEW_STRUCT,
-        READ_VALUE,
-        READ_FIELD,
-        CALL,
-        EXPORT,
-        DUP,
-        RETURN
+        STORE_FIELD, LOAD_FIELD,
+        STORE_IN_THIS, LOAD_FROM_THIS,
+        STORE_ATTRIBUTE, STORE_LOCAL,
+        LOAD_LOCAL, NEW_STRUCT,
+        READ_VALUE, READ_FIELD,
+        LOAD_SYMBOL, CALL,
+        EXPORT, DUP,
+        EQ, NEQ,
+        GT, GTE,
+        LT, LTE,
+        AND, OR,
+        NOT, CMP,
+        JMP, RETURN
     };
 
     constexpr static const char * const opcodeNames[] = {
-        "store_field",
-        "load_field",
-        "store_in_this",
-        "load_from_this",
-        "store_attribute",
-        "store_local",
-        "load_local",
-        "new_struct",
-        "read_value",
-        "read_field",
-        "call",
-        "export",
-        "dup",
-        "return"
+        "store_field", "load_field",
+        "store_in_this", "load_from_this",
+        "store_attribute", "store_local",
+        "load_local", "new_struct",
+        "read_value", "read_field",
+        "load_symbol", "call",
+        "export", "dup",
+        "eq", "neq",
+        "gt", "gte",
+        "lt", "lte",
+        "and", "or",
+        "not", "cmp",
+        "jmp", "return"
     };
 
     struct Instruction {
@@ -51,7 +49,9 @@ namespace pl::core::instr {
     };
 
     enum SymbolType {
-        STRING
+        STRING,
+        UNSIGNED_INTEGER,
+        SIGNED_INTEGER,
     };
 
     struct Symbol {
@@ -76,6 +76,41 @@ namespace pl::core::instr {
 
         [[nodiscard]] u64 hash() const override {
             return std::hash<std::string>{}(this->value);
+        }
+    };
+
+    struct UISymbol : Symbol {
+        explicit UISymbol(u64 value) : value(value) {
+            this->type = UNSIGNED_INTEGER;
+        }
+
+        u64 value;
+
+        ~UISymbol() override = default;
+        [[nodiscard]] std::string toString() const override {
+            return std::to_string(this->value);
+        }
+
+        [[nodiscard]] u64 hash() const override {
+            return std::hash<u64>{}(this->value);
+        }
+    };
+
+    class SISymbol : public Symbol {
+    public:
+        explicit SISymbol(i64 value) : value(value) {
+            this->type = SIGNED_INTEGER;
+        }
+
+        i64 value;
+
+        ~SISymbol() override = default;
+        [[nodiscard]] std::string toString() const override {
+            return std::to_string(this->value);
+        }
+
+        [[nodiscard]] u64 hash() const override {
+            return std::hash<i64>{}(this->value);
         }
     };
 
@@ -105,6 +140,16 @@ namespace pl::core::instr {
             return this->addSymbol(symbol);
         }
 
+        [[nodiscard]] u16 newUnsignedInteger(u64 value) {
+            auto symbol = new UISymbol { value };
+            return this->addSymbol(symbol);
+        }
+
+        [[nodiscard]] u16 newSignedInteger(i64 value) {
+            auto symbol = new SISymbol { value };
+            return this->addSymbol(symbol);
+        }
+
         [[nodiscard]] u16 addSymbol(Symbol *symbol) {
             // see if symbol already exists
             for (u16 i = 1; i < m_symbols.size(); i++) {
@@ -128,6 +173,15 @@ namespace pl::core::instr {
 
     class BytecodeEmitter {
     public:
+        struct EmitterFlags {
+            bool main : 1 = false;
+            bool ctor : 1 = false;
+        };
+
+        struct Label {
+            u16 targetPc;
+            std::vector<std::pair<u16, u16>> targets;
+        };
 
         BytecodeEmitter(SymbolTable& symbolTable, std::vector<Instruction>* instructions)
             : m_symbolTable(symbolTable), m_instructions(instructions) { }
@@ -185,6 +239,10 @@ namespace pl::core::instr {
                                              }));
         }
 
+        void load_symbol(u16 index) {
+            hlp::unused(this->addInstruction({ LOAD_SYMBOL, { index } }));
+        }
+
         void new_struct(const std::string& name) {
             hlp::unused(this->addInstruction({ NEW_STRUCT, { this->m_symbolTable.newString(name) } }));
         }
@@ -193,19 +251,80 @@ namespace pl::core::instr {
             hlp::unused(this->addInstruction({ CALL, { this->m_symbolTable.newString(name) } }));
         }
 
-        void export_() {
-            hlp::unused(this->addInstruction({ EXPORT }));
+        void export_(const std::string& name) {
+            hlp::unused(this->addInstruction({ EXPORT , { this->m_symbolTable.newString(name) } }));
         }
 
         void dup() {
             hlp::unused(this->addInstruction({ DUP }));
         }
 
+        void cmp() {
+            hlp::unused(this->addInstruction({ CMP }));
+        }
+
+        void eq() {
+            hlp::unused(this->addInstruction({ EQ }));
+        }
+
+        void neq() {
+            hlp::unused(this->addInstruction({ NEQ }));
+        }
+
+        void lt() {
+            hlp::unused(this->addInstruction({ LT }));
+        }
+
+        void gt() {
+            hlp::unused(this->addInstruction({ GT }));
+        }
+
+        void lte() {
+            hlp::unused(this->addInstruction({ LTE }));
+        }
+
+        void gte() {
+            hlp::unused(this->addInstruction({ GTE }));
+        }
+
+        void and_() {
+            hlp::unused(this->addInstruction({ AND }));
+        }
+
+        void or_() {
+            hlp::unused(this->addInstruction({ OR }));
+        }
+
+        void not_() {
+            hlp::unused(this->addInstruction({ NOT }));
+        }
+
+        void jmp(Label& label) {
+            label.targets.emplace_back( this->m_instructions->size(), 0 );
+            hlp::unused(this->addInstruction({ JMP, { label.targetPc } }));
+        }
+
+        void place_label(Label& label) {
+            label.targetPc = this->m_instructions->size();
+        }
+
+        void resolve_label(Label& label) {
+            for(auto &[index, operand] : label.targets) {
+                this->m_instructions->at(index).operands[operand] = label.targetPc - index;
+            }
+        }
+
         void return_() {
             hlp::unused(this->addInstruction({ RETURN }));
         }
 
-        [[nodiscard]]
+        void local(const std::string& name, const std::string& typeName) {
+            this->m_locals[name] = typeName;
+        }
+
+        [[nodiscard]] const std::string& getLocalType(const std::string& name) const {
+            return this->m_locals.at(name);
+        }
 
         u16 addInstruction(const Instruction& instruction) {
             auto result = m_instructions->size();
@@ -220,9 +339,14 @@ namespace pl::core::instr {
         [[nodiscard]] SymbolTable &getSymbolTable() {
             return m_symbolTable;
         }
+
+        EmitterFlags flags;
+
     private:
         SymbolTable& m_symbolTable;
+        std::vector<Label> m_labels;
         std::vector<Instruction>* m_instructions;
+        std::map<std::string, std::string> m_locals;
     };
 
     class Bytecode {
@@ -256,7 +380,7 @@ namespace pl::core::instr {
             return {m_symbolTable, instructions};
         }
 
-        [[nodiscard]] const SymbolTable &getSymbolTable() {
+        [[nodiscard]] SymbolTable &getSymbolTable() {
             return m_symbolTable;
         }
 
@@ -264,52 +388,65 @@ namespace pl::core::instr {
             return m_functions;
         }
 
+        std::string insnToString(u16 pc, const Instruction& instruction, const Function& function) const {
+            std::string ss = std::to_string(pc) + ": " + std::string(opcodeNames[instruction.opcode]) + " ";
+            switch (instruction.opcode) {
+                case STORE_FIELD:
+                case LOAD_FIELD:
+                case STORE_ATTRIBUTE:
+                case LOAD_LOCAL:
+                case NEW_STRUCT:
+                case LOAD_FROM_THIS:
+                case LOAD_SYMBOL:
+                case CALL: {
+                    u16 index = instruction.operands[0];
+                    return ss + '#' + std::to_string(index) + " (" + m_symbolTable.getSymbol(index)->toString() + ")";
+                }
+                case JMP: {
+                    i16 index = (i16) instruction.operands[0];
+                    u16 target = pc + index;
+                    auto insn = function.instructions->at(target);
+                    return ss + (index > 0 ? '+' : '-') + std::to_string(index) + " (" + insnToString(target, insn, function) + ")";
+                }
+                case READ_VALUE: {
+                    auto t = static_cast<Token::ValueType>(instruction.operands[0]);
+
+                    return ss + std::to_string(instruction.operands[0]) + " (" + Token::getTypeName(t) + ")";
+                }
+                case READ_FIELD: {
+                    u16 index1 = instruction.operands[0];
+                    u16 index2 = instruction.operands[1];
+                    auto t = static_cast<Token::ValueType>(instruction.operands[2]);
+
+                    ss += '#' + std::to_string(index1) + " (" + m_symbolTable.getSymbol(index1)->toString() + "), ";
+                    ss += '#' + std::to_string(index2) + " (" + m_symbolTable.getSymbol(index2)->toString() + "), ";
+                    return ss + std::to_string(instruction.operands[2]) + " (" + Token::getTypeName(t) + ")";
+                }
+                case STORE_IN_THIS:
+                case STORE_LOCAL: {
+                    u16 index1 = instruction.operands[0];
+                    u16 index2 = instruction.operands[1];
+                    ss += '#' + std::to_string(index1) + " (" + m_symbolTable.getSymbol(index1)->toString() + "), ";
+                    return ss + '#' + std::to_string(index2) + " (" + m_symbolTable.getSymbol(index2)->toString() + ")";
+                    break;
+                }
+                case EXPORT: {
+                    u16 index = instruction.operands[0];
+                    return ss + '#' + std::to_string(index) + " (" + m_symbolTable.getSymbol(index)->toString() + ")";
+                }
+                default:
+                    return ss;
+            }
+        }
+
         std::string toString() const {
             std::string ss;
-            for (auto& function : m_functions) {
+            for (const auto& function : m_functions) {
                 ss += "function " + m_symbolTable.getSymbol(function.name)->toString() + " {\n";
-                for (auto& instruction : *function.instructions) {
-                    ss += "    " + std::string(opcodeNames[instruction.opcode]) + " ";
-                    switch (instruction.opcode) {
-                        case STORE_FIELD:
-                        case LOAD_FIELD:
-                        case STORE_ATTRIBUTE:
-                        case LOAD_LOCAL:
-                        case NEW_STRUCT:
-                        case LOAD_FROM_THIS:
-                        case CALL: {
-                            u16 index = instruction.operands[0];
-                            ss += '#' + std::to_string(index) + " (" + m_symbolTable.getSymbol(index)->toString() + ")";
-                            break;
-                        }
-                        case READ_VALUE: {
-                            auto t = static_cast<Token::ValueType>(instruction.operands[0]);
-
-                            ss += std::to_string(instruction.operands[0]) + " (" + Token::getTypeName(t) + ")";
-                            break;
-                        }
-                        case READ_FIELD: {
-                            u16 index1 = instruction.operands[0];
-                            u16 index2 = instruction.operands[1];
-                            auto t = static_cast<Token::ValueType>(instruction.operands[2]);
-
-                            ss += '#' + std::to_string(index1) + " (" + m_symbolTable.getSymbol(index1)->toString() + "), ";
-                            ss += '#' + std::to_string(index2) + " (" + m_symbolTable.getSymbol(index2)->toString() + "), ";
-                            ss += std::to_string(instruction.operands[2]) + " (" + Token::getTypeName(t) + ")";
-                            break;
-                        }
-                        case STORE_IN_THIS:
-                        case STORE_LOCAL: {
-                            u16 index1 = instruction.operands[0];
-                            u16 index2 = instruction.operands[1];
-                            ss += '#' + std::to_string(index1) + " (" + m_symbolTable.getSymbol(index1)->toString() + "), ";
-                            ss += '#' + std::to_string(index2) + " (" + m_symbolTable.getSymbol(index2)->toString() + ")";
-                            break;
-                        }
-                        default:
-                            break;
-                    }
-                    ss += '\n';
+                u16 pc = 0;
+                for (const auto& instruction : *function.instructions) {
+                    ss += "    " + insnToString(pc, instruction, function) + "\n";
+                    pc++;
                 }
                 ss += "}\n";
             }

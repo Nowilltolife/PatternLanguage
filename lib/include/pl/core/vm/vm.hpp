@@ -56,8 +56,56 @@ namespace pl::core::vm {
         u128 address{};
         u64 section{};
 
-        struct : public std::variant<bool, u128, i128, double, Value*, Field*, Struct*> {
+        struct Internal : public std::variant<bool, u128, i128, double, Value*, Field*, Struct*> {
             using variant::variant;
+
+            u128 toInteger() {
+                return std::visit([](auto&& arg) -> u128 {
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, bool>) {
+                        return arg ? 1 : 0;
+                    } else if constexpr (std::is_same_v<T, u128> || std::is_same_v<T, i128>) {
+                        return (u128) arg;
+                    } else {
+                        err::E0002.throwError("Cannot convert value to integer", {}, 0);
+                    }
+                }, *this);
+            }
+
+            bool toBool() {
+                return std::visit([](auto&& arg) -> bool {
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, bool>) {
+                        return arg;
+                    } else if constexpr (std::is_same_v<T, u128> || std::is_same_v<T, i128>) {
+                        return arg != 0;
+                    } else {
+                        err::E0002.throwError("Cannot convert value to bool", {}, 0);
+                    }
+                }, *this);
+            }
+
+            std::string format() {
+                return std::visit([](auto&& arg) -> std::string {
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, bool>) {
+                        return arg ? "true" : "false";
+                    } else if constexpr (std::is_same_v<T, u128>) {
+                        return fmt::format("0x{:X}", arg);
+                    } else if constexpr (std::is_same_v<T, i128>) {
+                        return fmt::format("0x{:X}", arg);
+                    } else if constexpr (std::is_same_v<T, double>) {
+                        return fmt::format("{}", arg);
+                    } else if constexpr (std::is_same_v<T, Value*>) {
+                        return arg->v.format();
+                    } else if constexpr (std::is_same_v<T, Field*>) {
+                        return arg->value->v.format();
+                    } else if constexpr (std::is_same_v<T, Struct*>) {
+                        return "struct";
+                    }
+                    return "unknown";
+                }, *this);
+            }
         } v;
     };
 
@@ -140,5 +188,16 @@ namespace pl::core::vm {
         Value* result;
         bool m_running;
         IOOperations m_io;
+
+        enum Condition {
+            EQUAL,
+            NOT_EQUAL,
+            LESS,
+            LESS_EQUAL,
+            GREATER,
+            GREATER_EQUAL
+        };
+
+        static Value* compare(Value* b, Value* a, Condition condition);
     };
 }

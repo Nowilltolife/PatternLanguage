@@ -26,6 +26,11 @@ elseif (UNIX AND NOT APPLE)
     add_compile_definitions(OS_LINUX)
 endif ()
 
+if (NOT TARGET cgranges)
+    add_subdirectory(external/cgranges EXCLUDE_FROM_ALL)
+    set_property(TARGET cgranges PROPERTY POSITION_INDEPENDENT_CODE ON)
+endif ()
+
 if (NOT TARGET fmt::fmt)
     add_subdirectory(external/fmt EXCLUDE_FROM_ALL)
     set_property(TARGET fmt PROPERTY POSITION_INDEPENDENT_CODE ON)

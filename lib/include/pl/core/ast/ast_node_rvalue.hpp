@@ -262,6 +262,8 @@ namespace pl::core::ast {
                 return hlp::moveToVector(std::move(currPattern));
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
     private:
         Path m_path;
 

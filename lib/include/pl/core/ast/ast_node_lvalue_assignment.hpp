@@ -60,6 +60,8 @@ namespace pl::core::ast {
             return {};
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
     private:
         std::string m_lvalueName;
         std::unique_ptr<ASTNode> m_rvalue;

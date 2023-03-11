@@ -264,6 +264,8 @@ namespace pl::core::ast {
             rightValue));
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
         [[nodiscard]] const std::unique_ptr<ASTNode> &getLeftOperand() const { return this->m_left; }
         [[nodiscard]] const std::unique_ptr<ASTNode> &getRightOperand() const { return this->m_right; }
         [[nodiscard]] Token::Operator getOperator() const { return this->m_operator; }

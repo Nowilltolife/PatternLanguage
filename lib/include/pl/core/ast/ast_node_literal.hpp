@@ -18,6 +18,8 @@ namespace pl::core::ast {
             return this->m_literal;
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
     private:
         Token::Literal m_literal;
     };

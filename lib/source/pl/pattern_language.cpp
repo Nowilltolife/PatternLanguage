@@ -145,14 +145,16 @@ namespace pl {
                 this->m_internals.evaluator->writeData(addr, buf, size, 0);
             }
         });
+        std::cout << bytecode->toString();
         vm.loadBytecode(*bytecode);
         auto executionStart = std::chrono::high_resolution_clock::now();
         vm.executeFunction("<main>");
         auto executionEnd = std::chrono::high_resolution_clock::now();
-        evaluator->getConsole().log(core::LogConsole::Level::Info, "Execution time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - executionStart).count()) + "s");
-        evaluator->getConsole().log(core::LogConsole::Level::Info, "Compilation time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(compileEnd - compileStart).count()) + "s");
-        evaluator->getConsole().log(core::LogConsole::Level::Info, "Total time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - compileStart).count()) + "s");
-
+        evaluator->getConsole().log(core::LogConsole::Level::Info, "Execution time: "
+            + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - executionStart).count()) + "s"
+            + ", Compilation time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(compileEnd - compileStart).count()) + "s"
+            + ", Total time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - compileStart).count()) + "s"
+        );
         for (const auto &pattern : vm.getPatterns()) {
             this->m_patterns[pattern->getSection()].push_back(pattern);
         }
@@ -323,19 +325,20 @@ namespace pl {
         using Interval = interval_tree::Interval<u64, ptrn::Pattern*>;
 
         for (const auto &[section, patterns] : this->m_patterns) {
-            std::vector<Interval> intervals;
+            std::vector<Interval> intervals = { };
             for (const auto &pattern : patterns) {
                 auto children = pattern->getChildren();
 
-                intervals.reserve(children.size());
                 for (const auto &[address, child]: children) {
                     if (this->m_aborted)
                         return;
 
-                    if (child->getSize() == 0)
+                    auto size = child->getSize();
+
+                    if (size == 0)
                         continue;
 
-                    intervals.emplace_back(address, address + child->getSize() - 1, child);
+                    intervals.emplace_back(address, address + size - 1, child);
                 }
             }
 
@@ -349,7 +352,12 @@ namespace pl {
 
         auto intervals = this->m_flattenedPatterns.at(section).findOverlapping(address, address);
 
+        if (intervals.empty())
+            return { };
+
         std::vector<ptrn::Pattern*> results;
+        results.reserve(intervals.size());
+
         std::transform(intervals.begin(), intervals.end(), std::back_inserter(results), [](const auto &interval) {
             ptrn::Pattern* value = interval.value;
 

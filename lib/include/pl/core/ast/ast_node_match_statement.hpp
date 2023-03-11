@@ -124,6 +124,8 @@ namespace pl::core::ast {
             return std::nullopt;
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
     private:
         [[nodiscard]] bool evaluateCondition(const std::unique_ptr<ASTNode> &condition, Evaluator *evaluator) const {
             const auto node    = condition->evaluate(evaluator);

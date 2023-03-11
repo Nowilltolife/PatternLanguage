@@ -73,6 +73,8 @@ namespace pl::core::ast {
             return result;
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+
     public:
         std::vector<std::unique_ptr<ASTNode>> m_statements;
         bool m_newScope = false;
