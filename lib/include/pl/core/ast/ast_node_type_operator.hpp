@@ -29,51 +29,6 @@ namespace pl::core::ast {
             return this->m_expression;
         }
 
-        [[nodiscard]] std::unique_ptr<ASTNode> evaluate(Evaluator *evaluator) const override {
-            evaluator->updateRuntime(this);
-
-            u128 result;
-            if (this->m_providerOperation) {
-                switch (this->getOperator()) {
-                    case Token::Operator::AddressOf:
-                        result = evaluator->getDataBaseAddress();
-                        break;
-                    case Token::Operator::SizeOf:
-                        result = evaluator->getDataSize();
-                        break;
-                    default:
-                        err::E0001.throwError("Invalid type operation.", {}, this);
-                }
-            } else {
-                auto offset = evaluator->dataOffset();
-                evaluator->pushSectionId(ptrn::Pattern::InstantiationSectionId);
-                ON_SCOPE_EXIT {
-                    evaluator->dataOffset() = offset;
-                    evaluator->popSectionId();
-                };
-
-                auto patterns = this->m_expression->createPatterns(evaluator);
-                if (patterns.empty())
-                    err::E0005.throwError("'auto' can only be used with parameters.", { }, this);
-
-                auto &pattern = patterns.front();
-
-                switch (this->getOperator()) {
-                    case Token::Operator::AddressOf:
-                        result = pattern->getOffset();
-                        break;
-                    case Token::Operator::SizeOf:
-                        result = pattern->getSize();
-                        break;
-                    default:
-                        err::E0001.throwError("Invalid type operation.", {}, this);
-                }
-            }
-
-            return std::unique_ptr<ASTNode>(new ASTNodeLiteral(result));
-        }
-
-
     private:
         Token::Operator m_op;
         std::unique_ptr<ASTNode> m_expression;

@@ -6,19 +6,17 @@ namespace pl::ptrn {
 
     class PatternUnsigned : public Pattern {
     public:
-        PatternUnsigned(core::Evaluator *evaluator, u64 offset, size_t size)
-            : Pattern(evaluator, offset, size) { }
+        PatternUnsigned(core::VirtualMachine *evaluator, u64 offset, size_t size)
+                : Pattern(evaluator, offset, size) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
             return std::unique_ptr<Pattern>(new PatternUnsigned(*this));
         }
 
         [[nodiscard]] core::Token::Literal getValue() const override {
-            return transformValue(data);
-        }
-
-        void setData(u128 d) {
-            this->data = d;
+            u128 data = 0;
+            this->getVm()->readData(this->getOffset(), &data, this->getSize(), this->getSection());
+            return transformValue(hlp::changeEndianess(data, this->getSize(), this->getEndian()));
         }
 
         [[nodiscard]] std::string getFormattedName() const override {
@@ -32,6 +30,7 @@ namespace pl::ptrn {
         }
 
         std::string formatDisplayValue() override {
+            auto data = this->getValue().toUnsigned();
             return Pattern::formatDisplayValue(fmt::format("{:d} (0x{:0{}X})", data, data, this->getSize() * 2), this->getValue());
         }
 
@@ -41,8 +40,6 @@ namespace pl::ptrn {
 
             return Pattern::formatDisplayValue(result, value);
         }
-    private:
-        u128 data = 0;
     };
 
 }

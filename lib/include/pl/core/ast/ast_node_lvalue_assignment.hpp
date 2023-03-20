@@ -37,30 +37,11 @@ namespace pl::core::ast {
             this->m_rvalue = std::move(rvalue);
         }
 
-        [[nodiscard]] std::vector<std::shared_ptr<ptrn::Pattern>> createPatterns(Evaluator *evaluator) const override {
-            this->execute(evaluator);
-
-            return {};
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
+            hlp::unused(bytecode);
+            m_rvalue->emit(bytecode, emitter);
+            emitter.store_local(m_lvalueName, emitter.getLocalType(m_lvalueName));
         }
-
-        FunctionResult execute(Evaluator *evaluator) const override {
-            evaluator->updateRuntime(this);
-
-            const auto node    = this->getRValue()->evaluate(evaluator);
-            const auto literal = dynamic_cast<ASTNodeLiteral *>(node.get());
-            if (literal == nullptr)
-                err::E0010.throwError("Cannot assign void expression to variable.", {}, this);
-
-
-            if (this->getLValueName() == "$")
-                evaluator->dataOffset() = literal->getValue().toUnsigned();
-            else
-                evaluator->setVariable(this->getLValueName(), literal->getValue());
-
-            return {};
-        }
-
-        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
 
     private:
         std::string m_lvalueName;

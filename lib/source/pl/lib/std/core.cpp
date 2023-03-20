@@ -2,7 +2,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/lib/std/types.hpp>
 
 #include <pl/patterns/pattern.hpp>
@@ -26,7 +25,7 @@ namespace pl::lib::libstd::core {
         api::Namespace nsStdCore = { "builtin", "std", "core" };
         {
             /* has_attribute(pattern, attribute_name) */
-            runtime.addFunction(nsStdCore, "has_attribute", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "has_attribute", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
                 auto attributeName = params[1].toString(false);
 
@@ -38,7 +37,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* get_attribute_argument(pattern, attribute_name, index) */
-            runtime.addFunction(nsStdCore, "get_attribute_argument", FunctionParameterCount::exactly(3), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "get_attribute_argument", FunctionParameterCount::exactly(3), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
                 auto attributeName = params[1].toString(false);
                 auto index = params[2].toUnsigned();
@@ -51,7 +50,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* set_pattern_color(pattern, color) */
-            runtime.addFunction(nsStdCore, "set_pattern_color", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "set_pattern_color", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
                 auto color = params[1].toUnsigned();
 
@@ -71,7 +70,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* set_pattern_comment(pattern, comment) */
-            runtime.addFunction(nsStdCore, "set_pattern_comment", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "set_pattern_comment", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
                 auto comment = params[1].toString(false);
 
@@ -81,7 +80,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* set_endian(endian) */
-            runtime.addFunction(nsStdCore, "set_endian", FunctionParameterCount::exactly(1), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "set_endian", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
                 types::Endian endian = params[0].toUnsigned();
 
                 ctx->setDefaultEndian(endian);
@@ -90,7 +89,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* get_endian() -> endian */
-            runtime.addFunction(nsStdCore, "get_endian", FunctionParameterCount::none(), [](Evaluator *ctx, auto) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "get_endian", FunctionParameterCount::none(), [](VirtualMachine *ctx, auto) -> std::optional<Token::Literal> {
                 switch (ctx->getDefaultEndian()) {
                     case std::endian::big:
                         return 1;
@@ -102,7 +101,8 @@ namespace pl::lib::libstd::core {
             });
 
             /* array_index() -> index */
-            runtime.addFunction(nsStdCore, "array_index", FunctionParameterCount::none(), [](Evaluator *ctx, auto) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "array_index", FunctionParameterCount::none(), [](VirtualMachine *ctx, auto) -> std::optional<Token::Literal> {
+                hlp::unused(ctx);
                 auto index = ctx->getCurrentArrayIndex();
 
                 if (index.has_value())
@@ -112,7 +112,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* member_count(pattern) -> count */
-            runtime.addFunction(nsStdCore, "member_count", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "member_count", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
 
                 if (auto iteratable = dynamic_cast<ptrn::Iteratable*>(pattern); iteratable != nullptr)
@@ -122,7 +122,7 @@ namespace pl::lib::libstd::core {
             });
 
             /* has_member(pattern, name) -> member_exists */
-            runtime.addFunction(nsStdCore, "has_member", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "has_member", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
                 auto name = params[1].toString(false);
 
@@ -140,14 +140,14 @@ namespace pl::lib::libstd::core {
             });
 
             /* formatted_value(pattern) -> str */
-            runtime.addFunction(nsStdCore, "formatted_value", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "formatted_value", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
 
                 return pattern->getFormattedValue();
             });
 
             /* is_valid_enum(pattern) -> bool */
-            runtime.addFunction(nsStdCore, "is_valid_enum", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdCore, "is_valid_enum", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
 
                 if (auto enumPattern = dynamic_cast<ptrn::PatternEnum*>(pattern); enumPattern != nullptr) {

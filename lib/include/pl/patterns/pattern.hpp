@@ -1,7 +1,7 @@
 #pragma once
 
 #include <pl/core/errors/error.hpp>
-#include <pl/core/evaluator.hpp>
+#include "pl/core/vm.hpp"
 #include <pl/pattern_visitor.hpp>
 #include <pl/helpers/types.hpp>
 #include <pl/helpers/utils.hpp>
@@ -47,18 +47,14 @@ namespace pl::ptrn {
         constexpr static u64 PatternLocalSectionId  = 0xFFFF'FFFF'FFFF'FFFE;
         constexpr static u64 InstantiationSectionId = 0xFFFF'FFFF'FFFF'FFFD;
 
-        Pattern(core::Evaluator *evaluator, u64 offset, size_t size)
-            : m_evaluator(evaluator), m_offset(offset), m_size(size) {
+        Pattern(core::VirtualMachine *evaluator, u64 offset, size_t size)
+            : m_vm(evaluator), m_offset(offset), m_size(size) {
 
-            if (evaluator != nullptr) {
-                this->m_color       = evaluator->getNextPatternColor();
-                this->m_manualColor = false;
-                evaluator->patternCreated(this);
-            }
+            this->m_manualColor = false;
         }
 
         Pattern(const Pattern &other) {
-            this->m_evaluator = other.m_evaluator;
+            this->m_vm = other.m_vm;
             this->m_offset = other.m_offset;
             this->m_endian = other.m_endian;
             this->m_size = other.m_size;
@@ -74,17 +70,9 @@ namespace pl::ptrn {
                 this->m_cachedDisplayValue = std::make_unique<std::string>(*other.m_cachedDisplayValue);
             if (other.m_attributes != nullptr)
                 this->m_attributes = std::make_unique<std::map<std::string, std::vector<core::Token::Literal>>>(*other.m_attributes);
-
-            if (this->m_evaluator != nullptr) {
-                this->m_evaluator->patternCreated(this);
-            }
         }
 
-        virtual ~Pattern() {
-            if (this->m_evaluator != nullptr) {
-                this->m_evaluator->patternDestroyed(this);
-            }
-        }
+        virtual ~Pattern() = default;
 
         virtual std::unique_ptr<Pattern> clone() const = 0;
 
@@ -151,8 +139,8 @@ namespace pl::ptrn {
         [[nodiscard]] bool hasOverriddenColor() const { return this->m_manualColor; }
 
         [[nodiscard]] std::endian getEndian() const {
-            if (this->m_evaluator == nullptr) return std::endian::native;
-            else return this->m_endian.value_or(this->m_evaluator->getDefaultEndian());
+            if (this->m_vm == nullptr) return std::endian::native;
+            else return this->m_endian.value_or(this->m_vm->getDefaultEndian());
         }
         virtual void setEndian(std::endian endian) {
             if (this->isLocal()) return;
@@ -333,7 +321,7 @@ namespace pl::ptrn {
                 });
             } else {
                 result.resize(this->getSize());
-                this->getEvaluator()->readData(this->getOffset(), result.data(), result.size(), this->getSection());
+                this->getVm()->readData(this->getOffset(), result.data(), result.size(), this->getSection());
             }
 
             return result;
@@ -355,28 +343,29 @@ namespace pl::ptrn {
             if (formatterFunctionName.empty()) {
                 result = this->getBytesOf(value);
             } else {
-                try {
-                    const auto function = this->m_evaluator->findFunction(formatterFunctionName);
+                // TODO: write formatter function
+                /*try {
+                    const auto function = this->m_vm->findFunction(formatterFunctionName);
                     if (function.has_value()) {
-                        auto formatterResult = function->func(this->m_evaluator, { value });
+                        auto formatterResult = function->func(this->m_vm, {value });
 
                         if (formatterResult.has_value()) {
                             result = this->getBytesOf(*formatterResult);
                         }
                     }
                 } catch (core::err::EvaluatorError::Exception &error) {
-                    wolv::util::unused(error);
-                }
+                    hlp::unused(error);
+                }*/
             }
 
             if (!result.empty()) {
-                this->getEvaluator()->writeData(this->getOffset(), result.data(), result.size(), this->getSection());
+                this->getVm()->writeData(this->getOffset(), result.data(), result.size(), this->getSection());
                 this->clearFormatCache();
             }
         }
 
-        void setEvaluator(core::Evaluator *evaluator) {
-            this->m_evaluator = evaluator;
+        void setVm(core::VirtualMachine *evaluator) {
+            this->m_vm = evaluator;
         }
 
         void clearFormatCache() {
@@ -428,8 +417,8 @@ namespace pl::ptrn {
             this->m_cachedDisplayValue = std::make_unique<std::string>(value);
         }
 
-        [[nodiscard]] core::Evaluator* getEvaluator() const {
-            return this->m_evaluator;
+        [[nodiscard]] core::VirtualMachine* getVm() const {
+            return this->m_vm;
         }
 
         [[nodiscard]] bool isConstant() const {
@@ -453,25 +442,28 @@ namespace pl::ptrn {
         std::optional<std::endian> m_endian;
 
         [[nodiscard]] core::Token::Literal transformValue(const core::Token::Literal &value) const {
-            auto evaluator = this->getEvaluator();
+            // TODO: transform functions
+            /*auto evaluator = this->getVm();
             if (auto transformFunc = evaluator->findFunction(this->getTransformFunction()); transformFunc.has_value())
                 if (auto result = transformFunc->func(evaluator, { value }); result.has_value())
                     return *result;
-
+            */
             return value;
         }
 
         [[nodiscard]] virtual std::string formatDisplayValue() = 0;
 
         [[nodiscard]] std::string formatDisplayValue(const std::string &value, const core::Token::Literal &literal) const {
+            hlp::unused(literal);
             const auto &formatterFunctionName = this->getReadFormatterFunction();
             if (formatterFunctionName.empty())
                 return value;
             else {
-                try {
-                    const auto function = this->m_evaluator->findFunction(formatterFunctionName);
+                // TODO: formatter functions
+                /*try {
+                    const auto function = this->m_vm->findFunction(formatterFunctionName);
                     if (function.has_value()) {
-                        auto result = function->func(this->m_evaluator, { literal });
+                        auto result = function->func(this->m_vm, {literal });
 
                         if (result.has_value()) {
                             return result->toString(true);
@@ -484,8 +476,9 @@ namespace pl::ptrn {
 
                 } catch (core::err::EvaluatorError::Exception &error) {
                     return error.what();
-                }
+                }*/
             }
+            return "";
         }
 
         template<typename T>
@@ -501,9 +494,9 @@ namespace pl::ptrn {
         }
 
     private:
-        friend pl::core::Evaluator;
+        friend pl::core::VirtualMachine;
 
-        core::Evaluator *m_evaluator;
+        core::VirtualMachine *m_vm;
 
         std::unique_ptr<std::map<std::string, std::vector<core::Token::Literal>>> m_attributes;
         mutable std::unique_ptr<std::string> m_cachedDisplayValue;

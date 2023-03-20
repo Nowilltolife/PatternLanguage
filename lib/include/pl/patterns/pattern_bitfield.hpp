@@ -6,7 +6,8 @@ namespace pl::ptrn {
 
     class PatternBitfieldMember : public Pattern {
     public:
-        using Pattern::Pattern;
+        PatternBitfieldField(core::VirtualMachine *evaluator, u64 offset, u8 bitOffset, u8 bitSize, Pattern *bitfieldPattern = nullptr)
+            : Pattern(evaluator, offset, 0), m_bitOffset(bitOffset), m_bitSize(bitSize), m_bitField(bitfieldPattern) { }
 
         virtual void setParentBitfield(PatternBitfieldMember *parent) = 0;
 
@@ -392,8 +393,8 @@ namespace pl::ptrn {
                             public Inlinable,
                             public Iteratable {
     public:
-        PatternBitfield(core::Evaluator *evaluator, u64 offset, u8 firstBitOffset, u128 totalBitSize)
-            : PatternBitfieldMember(evaluator, offset, (totalBitSize + 7) / 8), m_firstBitOffset(firstBitOffset), m_totalBitSize(totalBitSize) { }
+        PatternBitfield(core::VirtualMachine *evaluator, u64 offset, size_t size)
+            : Pattern(evaluator, offset, size) { }
 
         PatternBitfield(const PatternBitfield &other) : PatternBitfieldMember(other) {
             for (auto &field : other.m_fields)
@@ -546,7 +547,7 @@ namespace pl::ptrn {
 
         std::string formatDisplayValue() override {
             std::vector<u8> bytes(this->getSize(), 0);
-            this->getEvaluator()->readData(this->getOffset(), bytes.data(), bytes.size(), this->getSection());
+            this->getVm()->readData(this->getOffset(), bytes.data(), bytes.size(), this->getSection());
 
             if (this->getEndian() == std::endian::little)
                 std::reverse(bytes.begin(), bytes.end());

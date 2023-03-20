@@ -17,23 +17,6 @@ namespace pl::core::ast {
             return std::unique_ptr<ASTNode>(new ASTNodeScopeResolution(*this));
         }
 
-        [[nodiscard]] std::unique_ptr<ASTNode> evaluate(Evaluator *evaluator) const override {
-            evaluator->updateRuntime(this);
-
-            auto type = this->m_type->evaluate(evaluator);
-
-            if (auto enumType = dynamic_cast<ASTNodeEnum *>(type.get())) {
-                for (auto &[name, values] : enumType->getEntries()) {
-                    if (name == this->m_name)
-                        return values.first->evaluate(evaluator);
-                }
-            } else {
-                err::E0004.throwError("Invalid scope resolution. This cannot be accessed using the scope resolution operator.", {}, this);
-            }
-
-            err::E0004.throwError(fmt::format("Cannot find constant '{}' in this type.", this->m_name), {}, this);
-        }
-
     private:
         std::shared_ptr<ASTNode> m_type;
         std::string m_name;

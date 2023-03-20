@@ -27,31 +27,6 @@ namespace pl::core::ast {
             return this->m_rvalue;
         }
 
-        [[nodiscard]] std::vector<std::shared_ptr<ptrn::Pattern>> createPatterns(Evaluator *evaluator) const override {
-            this->execute(evaluator);
-
-            return {};
-        }
-
-        FunctionResult execute(Evaluator *evaluator) const override {
-            evaluator->updateRuntime(this);
-
-            const auto lhs     = this->getLValue()->createPatterns(evaluator);
-            const auto rhs     = this->getRValue()->evaluate(evaluator);
-
-            if (lhs.empty())
-                err::E0003.throwError("Cannot find variable in this scope.", {}, this);
-
-            auto &pattern = lhs.front();
-            const auto literal = dynamic_cast<ASTNodeLiteral *>(rhs.get());
-            if (literal == nullptr)
-                err::E0010.throwError("Cannot assign void expression to variable.", {}, this);
-
-            evaluator->setVariable(pattern.get(), literal->getValue());
-
-            return {};
-        }
-
     private:
         std::unique_ptr<ASTNode> m_lvalue, m_rvalue;
     };

@@ -6,7 +6,7 @@ namespace pl::ptrn {
 
     class PatternBoolean : public Pattern {
     public:
-        explicit PatternBoolean(core::Evaluator *evaluator, u64 offset)
+        explicit PatternBoolean(core::VirtualMachine *evaluator, u64 offset)
             : Pattern(evaluator, offset, 1) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -15,7 +15,7 @@ namespace pl::ptrn {
 
         [[nodiscard]] core::Token::Literal getValue() const override {
             bool boolean = false;
-            this->getEvaluator()->readData(this->getOffset(), &boolean, 1, this->getSection());
+            this->getVm()->readData(this->getOffset(), &boolean, 1, this->getSection());
 
             return transformValue(boolean);
         }

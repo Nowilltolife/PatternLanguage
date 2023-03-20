@@ -9,7 +9,7 @@ namespace pl::ptrn {
 
     class PatternWideCharacter : public Pattern {
     public:
-        explicit PatternWideCharacter(core::Evaluator *evaluator, u64 offset)
+        explicit PatternWideCharacter(core::VirtualMachine *evaluator, u64 offset)
             : Pattern(evaluator, offset, 2) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -18,7 +18,7 @@ namespace pl::ptrn {
 
         [[nodiscard]] core::Token::Literal getValue() const override {
             char16_t character = '\u0000';
-            this->getEvaluator()->readData(this->getOffset(), &character, 2, this->getSection());
+            this->getVm()->readData(this->getOffset(), &character, 2, this->getSection());
             return transformValue(u128(hlp::changeEndianess(character, this->getEndian())));
         }
 

@@ -6,7 +6,7 @@ namespace pl::ptrn {
 
     class PatternString : public Pattern, public Iteratable {
     public:
-        PatternString(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternString(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -26,7 +26,7 @@ namespace pl::ptrn {
                 return "";
 
             std::string buffer(size, '\x00');
-            this->getEvaluator()->readData(this->getOffset(), buffer.data(), size, this->getSection());
+            this->getVm()->readData(this->getOffset(), buffer.data(), size, this->getSection());
 
             return buffer;
         }
@@ -62,14 +62,14 @@ namespace pl::ptrn {
                 return "\"\"";
 
             std::string buffer(size, 0x00);
-            this->getEvaluator()->readData(this->getOffset(), buffer.data(), size, this->getSection());
+            this->getVm()->readData(this->getOffset(), buffer.data(), size, this->getSection());
             auto displayString = hlp::encodeByteString({ buffer.begin(), buffer.end() });
 
             return Pattern::formatDisplayValue(fmt::format("\"{0}\" {1}", displayString, size > this->getSize() ? "(truncated)" : ""), buffer);
         }
 
         std::shared_ptr<Pattern> getEntry(size_t index) const override {
-            auto result = std::make_shared<PatternCharacter>(this->getEvaluator(), this->getOffset() + index);
+            auto result = std::make_shared<PatternCharacter>(this->getVm(), this->getOffset() + index);
             result->setSection(this->getSection());
 
             return result;

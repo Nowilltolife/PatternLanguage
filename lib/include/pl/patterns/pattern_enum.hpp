@@ -15,7 +15,7 @@ namespace pl::ptrn {
         };
 
     public:
-        PatternEnum(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternEnum(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -24,7 +24,7 @@ namespace pl::ptrn {
 
         [[nodiscard]] core::Token::Literal getValue() const override {
             u128 value = 0;
-            this->getEvaluator()->readData(this->getOffset(), &value, this->getSize(), this->getSection());
+            this->getVm()->readData(this->getOffset(), &value, this->getSize(), this->getSection());
 
             return transformValue(hlp::changeEndianess(value, this->getSize(), this->getEndian()));
         }

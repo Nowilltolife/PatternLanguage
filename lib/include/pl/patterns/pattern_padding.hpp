@@ -6,7 +6,7 @@ namespace pl::ptrn {
 
     class PatternPadding : public Pattern {
     public:
-        PatternPadding(core::Evaluator *evaluator, u64 offset, size_t size) : Pattern(evaluator, offset, size) { }
+        PatternPadding(core::VirtualMachine *evaluator, u64 offset, size_t size) : Pattern(evaluator, offset, size) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
             return std::unique_ptr<Pattern>(new PatternPadding(*this));

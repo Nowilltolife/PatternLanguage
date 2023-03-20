@@ -1,7 +1,6 @@
 #pragma once
 
 #include <pl/core/token.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 #include <pl/core/errors/evaluator_errors.hpp>
 #include <pl/core/bytecode/bytecode.hpp>
@@ -29,25 +28,6 @@ namespace pl::core::ast {
         [[maybe_unused]] constexpr void setSourceLocation(u32 line, u32 column) {
             this->m_line = line;
             this->m_column = column;
-        }
-
-        [[nodiscard]] virtual std::unique_ptr<ASTNode> evaluate(Evaluator *evaluator) const {
-            evaluator->updateRuntime(this);
-
-            return this->clone();
-        }
-
-        [[nodiscard]] virtual std::vector<std::shared_ptr<ptrn::Pattern>> createPatterns(Evaluator *evaluator) const {
-            evaluator->updateRuntime(this);
-
-            return {};
-        }
-
-        using FunctionResult = std::optional<Token::Literal>;
-        virtual FunctionResult execute(Evaluator *evaluator) const {
-            evaluator->updateRuntime(this);
-
-            err::E0001.throwError("Cannot execute non-functional statement.", "This is a evaluator bug!", this);
         }
 
         virtual void emit(instr::Bytecode& bytecode, instr::BytecodeEmitter& emitter) {

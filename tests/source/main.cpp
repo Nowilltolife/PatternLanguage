@@ -45,7 +45,7 @@ int runTests(int argc, char **argv) {
     });
 
 
-    runtime.addFunction({ "std" }, "assert", api::FunctionParameterCount::exactly(2), [](core::Evaluator *ctx, auto params) -> std::optional<core::Token::Literal> {
+    runtime.addFunction({ "std" }, "assert", api::FunctionParameterCount::exactly(2), [](core::VirtualMachine *ctx, auto params) -> std::optional<core::Token::Literal> {
         auto condition = params[0].toBoolean();
         auto message   = params[1].toString(false);
 

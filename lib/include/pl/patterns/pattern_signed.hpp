@@ -6,7 +6,7 @@ namespace pl::ptrn {
 
     class PatternSigned : public Pattern {
     public:
-        PatternSigned(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternSigned(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -15,7 +15,7 @@ namespace pl::ptrn {
 
         [[nodiscard]] core::Token::Literal getValue() const override {
             i128 data = 0;
-            this->getEvaluator()->readData(this->getOffset(), &data, this->getSize(), this->getSection());
+            this->getVm()->readData(this->getOffset(), &data, this->getSize(), this->getSection());
             data = hlp::changeEndianess(data, this->getSize(), this->getEndian());
 
             return transformValue(hlp::signExtend(this->getSize() * 8, data));

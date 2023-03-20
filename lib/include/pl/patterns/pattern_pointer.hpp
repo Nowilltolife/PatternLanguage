@@ -8,7 +8,7 @@ namespace pl::ptrn {
     class PatternPointer : public Pattern,
                            public Inlinable {
     public:
-        PatternPointer(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternPointer(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size), m_pointedAt(nullptr), m_pointerType(nullptr) {
         }
 

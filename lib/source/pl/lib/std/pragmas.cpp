@@ -1,8 +1,6 @@
 #include <pl.hpp>
 
 #include <pl/core/validator.hpp>
-#include <pl/core/evaluator.hpp>
-#include <pl/core/errors/preprocessor_errors.hpp>
 
 using namespace pl;
 
@@ -19,8 +17,10 @@ std::optional<u64> parseLimit(const std::string &value) {
 }
 
 namespace pl::lib::libstd {
+    // TODO: Adapt to new vm system
     void registerPragmas(pl::PatternLanguage &runtime) {
-        runtime.addPragma("endian", [](pl::PatternLanguage &runtime, const std::string &value) {
+        hlp::unused(runtime);
+        /*runtime.addPragma("endian", [](pl::PatternLanguage &runtime, const std::string &value) {
             if (value == "big") {
                 runtime.getInternals().evaluator->setDefaultEndian(std::endian::big);
                 return true;
@@ -83,7 +83,7 @@ namespace pl::lib::libstd {
             runtime.getInternals().evaluator->setDebugMode(true);
 
             return true;
-        });
+        });*/
 
     }
 

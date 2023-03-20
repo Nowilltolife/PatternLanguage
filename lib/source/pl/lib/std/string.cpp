@@ -2,7 +2,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 
 #include <vector>
@@ -20,14 +19,14 @@ namespace pl::lib::libstd::string {
         api::Namespace nsStdString = { "builtin", "std", "string" };
         {
             /* length(string) */
-            runtime.addFunction(nsStdString, "length", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdString, "length", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto string = params[0].toString(false);
 
                 return u128(string.length());
             });
 
             /* at(string, index) */
-            runtime.addFunction(nsStdString, "at", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdString, "at", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto string = params[0].toString(false);
                 auto index  = params[1].toSigned();
 
@@ -48,7 +47,7 @@ namespace pl::lib::libstd::string {
             });
 
             /* substr(string, pos, count) */
-            runtime.addFunction(nsStdString, "substr", FunctionParameterCount::exactly(3), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdString, "substr", FunctionParameterCount::exactly(3), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto string = params[0].toString(false);
                 auto pos    = params[1].toUnsigned();
                 auto size   = params[2].toUnsigned();
@@ -60,7 +59,7 @@ namespace pl::lib::libstd::string {
             });
 
             /* parse_int(string, base) */
-            runtime.addFunction(nsStdString, "parse_int", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdString, "parse_int", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto string = params[0].toString(false);
                 auto base   = params[1].toUnsigned();
 
@@ -68,7 +67,7 @@ namespace pl::lib::libstd::string {
             });
 
             /* parse_float(string) */
-            runtime.addFunction(nsStdString, "parse_float", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdString, "parse_float", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto string = params[0].toString(false);
 
                 return double(std::strtod(string.c_str(), nullptr));

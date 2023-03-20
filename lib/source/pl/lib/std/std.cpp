@@ -2,7 +2,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 
 #include <vector>
@@ -52,23 +51,27 @@ namespace pl::lib::libstd::libstd {
         using FunctionParameterCount = pl::api::FunctionParameterCount;
         using namespace pl::core;
 
+        // TODO: Adapt to new vm system
+
         pl::api::Namespace nsStd = { "builtin", "std" };
         {
             /* print(format, args...) */
-            runtime.addFunction(nsStd, "print", FunctionParameterCount::moreThan(0), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                ctx->getConsole().log(LogConsole::Level::Info, format(params));
+            runtime.addFunction(nsStd, "print", FunctionParameterCount::moreThan(0), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+                //ctx->getConsole().log(LogConsole::Level::Info, format(params));
 
                 return std::nullopt;
             });
 
             /* format(format, args...) */
-            runtime.addFunction(nsStd, "format", FunctionParameterCount::moreThan(0), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStd, "format", FunctionParameterCount::moreThan(0), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 return format(params);
             });
 
             /* env(name) */
-            runtime.addFunction(nsStd, "env", FunctionParameterCount::exactly(1), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto name = params[0].toString(false);
+            runtime.addFunction(nsStd, "env", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+                /*auto name = params[0].toString(false);
 
                 auto env = ctx->getEnvVariable(name);
                 if (env)
@@ -76,24 +79,26 @@ namespace pl::lib::libstd::libstd {
                 else {
                     ctx->getConsole().log(LogConsole::Level::Warning, fmt::format("environment variable '{}' does not exist", name));
                     return "";
-                }
+                }*/
+                return "";
             });
 
             /* pack_size(...) */
-            runtime.addFunction(nsStd, "sizeof_pack", FunctionParameterCount::atLeast(0), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStd, "sizeof_pack", FunctionParameterCount::atLeast(0), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 return u128(params.size());
             });
 
             /* error(message) */
-            runtime.addFunction(nsStd, "error", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStd, "error", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 err::E0012.throwError(params[0].toString(true));
 
                 return std::nullopt;
             });
 
             /* warning(message) */
-            runtime.addFunction(nsStd, "warning", FunctionParameterCount::exactly(1), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                ctx->getConsole().log(LogConsole::Level::Warning, params[0].toString(true));
+            runtime.addFunction(nsStd, "warning", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+                //ctx->getConsole().log(LogConsole::Level::Warning, params[0].toString(true));
 
                 return std::nullopt;
             });

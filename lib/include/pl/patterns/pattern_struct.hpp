@@ -8,7 +8,7 @@ namespace pl::ptrn {
                           public Inlinable,
                           public Iteratable {
     public:
-        PatternStruct(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternStruct(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         PatternStruct(const PatternStruct &other) : Pattern(other) {

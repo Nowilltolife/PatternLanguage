@@ -9,7 +9,7 @@ namespace pl::ptrn {
 
     class PatternWideString : public Pattern, public Iteratable {
     public:
-        PatternWideString(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternWideString(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -22,7 +22,7 @@ namespace pl::ptrn {
 
         std::string getValue(size_t size) const {
             std::u16string buffer(this->getSize() / sizeof(char16_t), 0x00);
-            this->getEvaluator()->readData(this->getOffset(), buffer.data(), size, this->getSection());
+            this->getVm()->readData(this->getOffset(), buffer.data(), size, this->getSection());
 
             for (auto &c : buffer)
                 c = hlp::changeEndianess(c, 2, this->getEndian());
@@ -40,7 +40,7 @@ namespace pl::ptrn {
 
         [[nodiscard]] std::string toString() const override {
             std::u16string buffer(this->getSize() / sizeof(char16_t), 0x00);
-            this->getEvaluator()->readData(this->getOffset(), buffer.data(), this->getSize(), this->getSection());
+            this->getVm()->readData(this->getOffset(), buffer.data(), this->getSize(), this->getSection());
 
             for (auto &c : buffer)
                 c = hlp::changeEndianess(c, 2, this->getEndian());
@@ -76,7 +76,7 @@ namespace pl::ptrn {
         }
 
         std::shared_ptr<Pattern> getEntry(size_t index) const override {
-            auto result = std::make_shared<PatternWideCharacter>(this->getEvaluator(), this->getOffset() + index * sizeof(char16_t));
+            auto result = std::make_shared<PatternWideCharacter>(this->getVm(), this->getOffset() + index * sizeof(char16_t));
             result->setSection(this->getSection());
 
             return result;

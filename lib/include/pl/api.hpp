@@ -1,6 +1,7 @@
 #pragma once
 
 #include <pl/core/token.hpp>
+#include "pl/core/vm.hpp"
 #include <pl/helpers/types.hpp>
 
 #include <cmath>
@@ -67,7 +68,7 @@ namespace pl::api {
     };
 
     using Namespace = std::vector<std::string>;
-    using FunctionCallback  = std::function<std::optional<core::Token::Literal>(core::Evaluator *, const std::vector<core::Token::Literal> &)>;
+    using FunctionCallback  = std::function<std::optional<core::Token::Literal>(core::VirtualMachine *, const std::vector<core::Token::Literal> &)>;
 
     struct Function {
         FunctionParameterCount parameterCount;

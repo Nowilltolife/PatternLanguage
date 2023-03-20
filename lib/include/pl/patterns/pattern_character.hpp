@@ -6,7 +6,7 @@ namespace pl::ptrn {
 
     class PatternCharacter : public Pattern {
     public:
-        PatternCharacter(core::Evaluator *evaluator, u64 offset)
+        explicit PatternCharacter(core::VirtualMachine *evaluator, u64 offset)
             : Pattern(evaluator, offset, 1) { }
 
         [[nodiscard]] std::unique_ptr<Pattern> clone() const override {
@@ -15,7 +15,7 @@ namespace pl::ptrn {
 
         [[nodiscard]] core::Token::Literal getValue() const override {
             char character = '\x00';
-            this->getEvaluator()->readData(this->getOffset(), &character, 1, this->getSection());
+            this->getVm()->readData(this->getOffset(), &character, 1, this->getSection());
 
             return transformValue(character);
         }

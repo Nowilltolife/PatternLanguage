@@ -8,7 +8,7 @@ namespace pl::ptrn {
                                public Inlinable,
                                public Iteratable {
     public:
-        PatternArrayStatic(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternArrayStatic(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         PatternArrayStatic(const PatternArrayStatic &other) : Pattern(other) {
@@ -32,20 +32,10 @@ namespace pl::ptrn {
         }
 
         void forEachEntry(u64 start, u64 end, const std::function<void(u64, Pattern*)>& fn) override {
-            auto evaluator = this->getEvaluator();
-            auto startArrayIndex = evaluator->getCurrentArrayIndex();
-            ON_SCOPE_EXIT {
-                if (startArrayIndex.has_value())
-                    evaluator->setCurrentArrayIndex(*startArrayIndex);
-                else
-                    evaluator->clearCurrentArrayIndex();
-            };
-
             auto &entry = this->m_template;
             for (u64 index = start; index < std::min<u64>(end, this->m_entryCount); index++) {
                 entry->setVariableName(fmt::format("[{0}]", index));
                 entry->setOffset(this->getOffset() + index * this->m_template->getSize());
-                evaluator->setCurrentArrayIndex(index);
 
                 if (this->m_formatCache.contains(index))
                     entry->setFormatValue(this->m_formatCache[index]);

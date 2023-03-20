@@ -18,7 +18,18 @@ namespace pl::core::ast {
             return this->m_literal;
         }
 
-        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
+            hlp::unused(bytecode);
+            if(Token::isUnsigned(m_literal.getType())) {
+                u16 symbol = bytecode.getSymbolTable().newUnsignedInteger(m_literal.toUnsigned());
+                emitter.load_symbol(symbol);
+            } else if(Token::isSigned(m_literal.getType())) {
+                u16 symbol = bytecode.getSymbolTable().newSignedInteger((i64) m_literal.toSigned());
+                emitter.load_symbol(symbol);
+            } else {
+                //core::err::P0002.throwError("Don't know how to emit literal", {}, 0);
+            }
+        }
 
     private:
         Token::Literal m_literal;

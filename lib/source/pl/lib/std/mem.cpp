@@ -2,7 +2,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 #include <pl/lib/std/types.hpp>
 
@@ -12,7 +11,7 @@
 
 namespace pl::lib::libstd::mem {
 
-    static std::optional<u128> findSequence(core::Evaluator *ctx, u64 occurrenceIndex, u64 offsetFrom, u64 offsetTo, const std::vector<u8> &sequence) {
+    /*static std::optional<u128> findSequence(core::VirtualMachine *ctx, u64 occurrenceIndex, u64 offsetFrom, u64 offsetTo, const std::vector<u8> &sequence) {
         std::vector<u8> bytes(sequence.size(), 0x00);
         u32 occurrences      = 0;
         const u64 bufferSize = ctx->getDataSize();
@@ -31,11 +30,13 @@ namespace pl::lib::libstd::mem {
         }
 
         return std::nullopt;
-    };
+    };*/
 
     void registerFunctions(pl::PatternLanguage &runtime) {
         using FunctionParameterCount = pl::api::FunctionParameterCount;
         using namespace pl::core;
+
+        // TODO: Adapt to new vm system
 
         api::Namespace nsStdMem = { "builtin", "std", "mem" };
         {
@@ -44,19 +45,25 @@ namespace pl::lib::libstd::mem {
             runtime.addFunction(nsStdMem, "base_address", FunctionParameterCount::none(), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
                 wolv::util::unused(params);
 
-                return u128(ctx->getDataBaseAddress());
+                //return u128(ctx->getDataBaseAddress());
+
+                return u128(0);
             });
 
             /* size() */
             runtime.addFunction(nsStdMem, "size", FunctionParameterCount::none(), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
                 wolv::util::unused(params);
 
-                return u128(ctx->getDataSize());
+                //return u128(ctx->getDataSize());
+
+                return u128(0);
             });
 
             /* find_sequence_in_range(occurrence_index, start_offset, end_offset, bytes...) */
-            runtime.addFunction(nsStdMem, "find_sequence_in_range", FunctionParameterCount::moreThan(3), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto occurrenceIndex = params[0].toUnsigned();
+            runtime.addFunction(nsStdMem, "find_sequence_in_range", FunctionParameterCount::moreThan(3), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+
+                /*auto occurrenceIndex = params[0].toUnsigned();
                 auto offsetFrom      = params[1].toUnsigned();
                 auto offsetTo        = params[2].toUnsigned();
 
@@ -68,23 +75,27 @@ namespace pl::lib::libstd::mem {
                         err::E0012.throwError(fmt::format("Invalid byte value {}.", byte), "Try a value between 0x00 and 0xFF.");
 
                     sequence.push_back(u8(byte & 0xFF));
-                }
+                }*/
 
-                return findSequence(ctx, occurrenceIndex, offsetFrom, offsetTo, sequence).value_or(-1);
+                //return findSequence(ctx, occurrenceIndex, offsetFrom, offsetTo, sequence).value_or(-1);
+                return u128(0);
             });
 
             /* find_string_in_range(occurrence_index, start_offset, end_offset, string) */
-            runtime.addFunction(nsStdMem, "find_string_in_range", FunctionParameterCount::exactly(4), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto occurrenceIndex = params[0].toUnsigned();
+            runtime.addFunction(nsStdMem, "find_string_in_range", FunctionParameterCount::exactly(4), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+
+                /*auto occurrenceIndex = params[0].toUnsigned();
                 auto offsetFrom      = params[1].toUnsigned();
                 auto offsetTo        = params[2].toUnsigned();
                 auto string          = params[3].toString(false);
 
-                return findSequence(ctx, occurrenceIndex, offsetFrom, offsetTo, std::vector<u8>(string.data(), string.data() + string.size())).value_or(-1);
+                return findSequence(ctx, occurrenceIndex, offsetFrom, offsetTo, std::vector<u8>(string.data(), string.data() + string.size())).value_or(-1);*/
+                return u128(0);
             });
 
             /* read_unsigned(address, size, endian) */
-            runtime.addFunction(nsStdMem, "read_unsigned", FunctionParameterCount::exactly(3), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdMem, "read_unsigned", FunctionParameterCount::exactly(3), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
                 auto address            = params[0].toUnsigned();
                 auto size               = params[1].toSigned();
                 types::Endian endian    = params[2].toUnsigned();
@@ -100,7 +111,7 @@ namespace pl::lib::libstd::mem {
             });
 
             /* read_signed(address, size, endian) */
-            runtime.addFunction(nsStdMem, "read_signed", FunctionParameterCount::exactly(3), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdMem, "read_signed", FunctionParameterCount::exactly(3), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
                 auto address            = params[0].toUnsigned();
                 auto size               = params[1].toSigned();
                 types::Endian endian    = params[2].toUnsigned();
@@ -117,7 +128,7 @@ namespace pl::lib::libstd::mem {
             });
 
             /* read_string(address, size, endian) */
-            runtime.addFunction(nsStdMem, "read_string", FunctionParameterCount::exactly(2), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdMem, "read_string", FunctionParameterCount::exactly(2), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
                 auto address = params[0].toUnsigned();
                 auto size    = params[1].toUnsigned();
 
@@ -144,31 +155,38 @@ namespace pl::lib::libstd::mem {
 
 
             /* create_section(name) -> id */
-            runtime.addFunction(nsStdMem, "create_section", FunctionParameterCount::exactly(1), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdMem, "create_section", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx);
                 auto name = params[0].toString(false);
 
-                return u128(ctx->createSection(name));
+                //return u128(ctx->createSection(name));
+                return u128(0);
             });
 
             /* delete_section(id) */
-            runtime.addFunction(nsStdMem, "delete_section", FunctionParameterCount::exactly(1), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto id = params[0].toUnsigned();
+            runtime.addFunction(nsStdMem, "delete_section", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+                //auto id = params[0].toUnsigned();
 
-                ctx->removeSection(id);
+                //ctx->removeSection(id);
 
                 return std::nullopt;
             });
 
             /* get_section_size(id) -> size */
-            runtime.addFunction(nsStdMem, "get_section_size", FunctionParameterCount::exactly(1), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto id = params[0].toUnsigned();
+            runtime.addFunction(nsStdMem, "get_section_size", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+                //auto id = params[0].toUnsigned();
 
-                return u128(ctx->getSection(id).size());
+                //return u128(ctx->getSection(id).size());
+                return u128(0);
             });
 
             /* copy_section_to_section(from_id, from_address, to_id, to_address, size) */
-            runtime.addFunction(nsStdMem, "copy_to_section", FunctionParameterCount::exactly(5), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto fromId     = params[0].toUnsigned();
+            runtime.addFunction(nsStdMem, "copy_to_section", FunctionParameterCount::exactly(5), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+
+                /*auto fromId     = params[0].toUnsigned();
                 auto fromAddr   = params[1].toUnsigned();
                 auto toId       = params[2].toUnsigned();
                 auto toAddr     = params[3].toUnsigned();
@@ -184,14 +202,16 @@ namespace pl::lib::libstd::mem {
                 auto& section = ctx->getSection(toId);
                 if (section.size() < toAddr + size)
                     section.resize(toAddr + size);
-                std::memcpy(section.data() + toAddr, data.data(), size);
+                std::memcpy(section.data() + toAddr, data.data(), size);*/
 
                 return std::nullopt;
             });
 
             /* copy_value_to_section(value, section_id, to_address) */
-            runtime.addFunction(nsStdMem, "copy_value_to_section", FunctionParameterCount::exactly(3), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                auto toId       = params[1].toUnsigned();
+            runtime.addFunction(nsStdMem, "copy_value_to_section", FunctionParameterCount::exactly(3), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
+                hlp::unused(ctx, params);
+
+                /*auto toId       = params[1].toUnsigned();
                 auto toAddr     = params[2].toUnsigned();
 
                 if (toId == ptrn::Pattern::MainSectionId)
@@ -231,7 +251,7 @@ namespace pl::lib::libstd::mem {
                     }
                     default:
                         err::E0012.throwError("Invalid value type.", "Only strings and patterns are allowed.");
-                }
+                }*/
 
                 return std::nullopt;
             });

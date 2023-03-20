@@ -1,8 +1,8 @@
 #include <variant>
 #include <assert.h>
 
-#include <pl/core/evaluator.hpp>
-#include <pl/core/vm/vm.hpp>
+#include <pl/core/token.hpp>
+#include "pl/core/vm.hpp"
 #include <pl/patterns/pattern.hpp>
 #include <pl/patterns/pattern_unsigned.hpp>
 #include <pl/patterns/pattern_signed.hpp>
@@ -36,13 +36,13 @@
 
 #define COMPARE_CASE(op, operation) \
     case op: { \
-        stack.push(compare(vpop(stack), vpop(stack), operation)); \
+        stack.push(compare(stack.pop(), stack.pop(), operation)); \
         break; \
     }
 
 using namespace pl;
 using namespace pl::core;
-using namespace pl::core::vm;
+using namespace pl::core;
 using namespace pl::core::instr;
 using namespace pl::ptrn;
 using pl::core::instr::Opcode;
@@ -60,16 +60,6 @@ template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 #define THIS LOCAL(STATIC(thisName))
 #define INSTRUCTION FRAME->m_instructions[FRAME->pc]
 
-template <typename T>
-auto vpop(std::stack<T>& stack) {
-    if(stack.empty()) {
-        err::E0001.throwError("Stack underflow");
-    }
-    auto v = std::move(stack.top());
-    stack.pop();
-    return v;
-}
-
 u32 colorIndex = 0;
 
 u32 getNextPalletColor() {
@@ -81,9 +71,13 @@ u32 getNextPalletColor() {
     return Palette[index];
 }
 
-Value* VirtualMachine::readStaticValue(u16 type) {
+Value newValue() {
+    return std::make_unique<Value_>();
+}
+
+Value VirtualMachine::readStaticValue(u16 type) {
     auto valueType = (Token::ValueType) type;
-    auto value = new Value();
+    auto value = newValue();
     value->size = Token::getTypeSize(valueType);
     value->address = this->m_address;
     value->section = 0;
@@ -109,7 +103,7 @@ Value* VirtualMachine::readStaticValue(u16 type) {
     return value;
 }
 
-std::shared_ptr<Pattern> VirtualMachine::convert(Value* value) {
+std::shared_ptr<Pattern> VirtualMachine::convert(const Value& value) {
     auto a = std::visit(overloaded {
         [&](bool b) {
             hlp::unused(b);
@@ -120,18 +114,17 @@ std::shared_ptr<Pattern> VirtualMachine::convert(Value* value) {
             return (std::shared_ptr<Pattern>) std::make_shared<PatternFloat>(nullptr, value->address, value->size);
         },
         [&](u128 v) {
-            auto pattern = std::make_shared<PatternUnsigned>(nullptr, value->address, value->size);
-            pattern->setData(v);
-            return (std::shared_ptr<Pattern>) pattern;
+            hlp::unused(v);
+            return (std::shared_ptr<Pattern>) std::make_shared<PatternUnsigned>(nullptr, value->address, value->size);
         },
         [&](i128 v) {
             hlp::unused(v);
             return (std::shared_ptr<Pattern>) std::make_shared<PatternSigned>(nullptr, value->address, value->size);
         },
-        [&](Struct* strct) {
+        [&](const Struct& strct) {
             std::vector<std::shared_ptr<Pattern>> members;
             u64 size = 0;
-            for (const auto &[name, field]: strct->fields) {
+            for (const auto &[name, field]: strct.fields) {
                 auto fieldPattern = convert(field.value);
                 fieldPattern->setVariableName(lookupString(field.name));
                 fieldPattern->setTypeName(lookupString(field.typeName));
@@ -139,8 +132,8 @@ std::shared_ptr<Pattern> VirtualMachine::convert(Value* value) {
                 size += fieldPattern->getSize();
             }
             auto pattern = std::make_shared<PatternStruct>(nullptr, value->address, size);
-            pattern->setTypeName(lookupString(strct->typeName));
-            pattern->setVariableName(lookupString(strct->name));
+            pattern->setTypeName(lookupString(strct.typeName));
+            pattern->setVariableName(lookupString(strct.name));
             pattern->setMembers(members);
             return (std::shared_ptr<Pattern>) pattern;
         },
@@ -150,7 +143,7 @@ std::shared_ptr<Pattern> VirtualMachine::convert(Value* value) {
             fieldPattern->setTypeName(lookupString(field->typeName));
             return (std::shared_ptr<Pattern>) fieldPattern;
         },
-        [&](Value* value) {
+        [&](const Value& value) {
             return (std::shared_ptr<Pattern>) convert(value);
         }
     }, value->v);
@@ -159,6 +152,7 @@ std::shared_ptr<Pattern> VirtualMachine::convert(Value* value) {
 }
 
 void VirtualMachine::loadBytecode(Bytecode bytecode) {
+    this->reset();
     this->m_symbolTable = bytecode.getSymbolTable();
     // initalize statics
     this->m_staticNames = {
@@ -173,6 +167,8 @@ void VirtualMachine::loadBytecode(Bytecode bytecode) {
 void VirtualMachine::enterFunction(u32 name) {
     // retrieve from function table
     auto function = this->lookupFunction(name);
+    ASSERT(function.name != 0, fmt::format("Function with name {} not found", name).c_str());
+    this->m_function = function;
     auto actualName = dynamic_cast<StringSymbol* >(this->m_symbolTable.getSymbol(function.name));
     auto prev = this->m_frame;
     auto frame = new Frame();
@@ -181,7 +177,7 @@ void VirtualMachine::enterFunction(u32 name) {
     if(actualName->value[0] == '<') { // is initializer
         if (prev != nullptr) {
             ASSERT(!prev->stack.empty(), "Initializer called without a structure");
-            const auto &v = vpop(prev->stack);
+            const auto& v = prev->stack.pop();
             frame->locals[this->m_staticNames.thisName] = v;
             frame->stack.push(v); // also leave it at the bottom of stack so return will return it
         }
@@ -198,16 +194,20 @@ void VirtualMachine::leaveFunction() {
         // shutdown vm
         this->m_running = false;
         if(!stack.empty())
-            this->result = vpop(stack);
+            this->result = stack.pop();
+        delete this->m_frame;
+        this->m_frame = nullptr;
     } else {
-        auto prev = vpop(this->m_frames);
+        auto prev = this->m_frames.pop();
         if(!stack.empty())
-            prev->stack.push(vpop(stack)); // return value
+            prev->stack.push(stack.pop()); // return value
+        // delete current frame
+        delete this->m_frame;
         this->m_frame = prev; // switch control over
     }
 }
 
-Value* VirtualMachine::executeFunction(const std::string& function) {
+Value VirtualMachine::executeFunction(const std::string& function) {
     auto name = this->m_symbolTable.newString(function);
     auto fn = this->lookupFunction(name);
     if(fn.name == 0) {
@@ -215,8 +215,11 @@ Value* VirtualMachine::executeFunction(const std::string& function) {
     }
     this->enterFunction(this->m_symbolTable.newString(function));
     this->run();
-    this->leaveFunction();
     return this->result;
+}
+
+void VirtualMachine::enterMain() {
+    this->enterFunction(this->m_staticNames.mainName);
 }
 
 void VirtualMachine::run() {
@@ -224,6 +227,21 @@ void VirtualMachine::run() {
     while(this->m_running) {
         this->step();
     }
+}
+
+void VirtualMachine::reset() {
+    colorIndex = 0;
+    this->m_frames.clear();
+    delete this->m_frame;
+    this->m_frame = nullptr;
+    this->m_function = {};
+    this->m_running = false;
+    this->m_symbolTable.clear();
+    this->m_functions.clear();
+    this->m_staticNames = {};
+    this->result = nullptr;
+    this->m_address = 0;
+    this->m_patterns.clear();
 }
 
 void VirtualMachine::step() {
@@ -235,10 +253,10 @@ void VirtualMachine::step() {
         case STORE_IN_THIS: {
             auto &name = instruction.operands[0];
             auto &typeName = instruction.operands[1];
-            auto value = vpop(stack);
-            auto v = get_if<Struct*>(&locals[m_staticNames.thisName]->v);
+            auto value = stack.pop();
+            auto v = get_if<Struct>(&locals[m_staticNames.thisName]->v);
             ASSERT(v != nullptr, "'this' is not a structure");
-            auto &f = (*v)->fields[name];
+            auto &f = (*v).fields[name];
             f.value = value;
             f.name = name;
             f.typeName = typeName;
@@ -246,20 +264,20 @@ void VirtualMachine::step() {
         }
         case LOAD_FROM_THIS: {
             auto &index = instruction.operands[0];
-            auto v = get_if<Struct*>(&locals[m_staticNames.thisName]->v);
+            auto v = get_if<Struct>(&locals[m_staticNames.thisName]->v);
             ASSERT(v != nullptr, "'this' is not a structure");
-            stack.push((*v)->fields[index].value);
+            stack.push((*v).fields[index].value);
             break;
         }
         case STORE_FIELD: {
             auto &name = instruction.operands[0];
-            auto value = vpop(stack);
-            auto structure = vpop(stack);
-            auto v = get_if<Struct*>(&structure->v);
+            auto value = stack.pop();
+            auto structure = stack.pop();
+            auto v = get_if<Struct>(&structure->v);
             if(v == nullptr) {
                 err::E0001.throwError(fmt::format("#{:x} store_field failed: structure is not a structure", frame->pc));
             }
-            auto &f = (*v)->fields[name];
+            auto &f = (*v).fields[name];
             f.value = value;
             f.name = name;
             break;
@@ -269,6 +287,11 @@ void VirtualMachine::step() {
             stack.push(stack.top());
             break;
         }
+        case POP: {
+            ASSERT(!stack.empty(), "Cannot pop empty stack");
+            stack.pop();
+            break;
+        }
         case LOAD_FIELD:
             break;
         case STORE_ATTRIBUTE:
@@ -276,20 +299,20 @@ void VirtualMachine::step() {
         case STORE_LOCAL: {
             auto &index = instruction.operands[0];
             //auto &typeName = instruction.operands[1];
-            locals[index] = vpop(stack);
+            locals[index] = stack.pop();
             break;
         }
         case LOAD_LOCAL: {
             auto &index = instruction.operands[0];
             if(!locals.contains(index))
-                err::E0001.throwError(fmt::format("#{:x} load_local failed: local {} not found", frame->pc, index));
+                err::E0003.throwError(fmt::format("No variable named '{}' found.", lookupString(index)), {}, 0);
             stack.push(locals[index]);
             break;
         }
         case LOAD_SYMBOL: {
             auto &index = instruction.operands[0];
             auto symbol = this->m_symbolTable.getSymbol(index);
-            auto value = new Value();
+            auto value = newValue();
             switch (symbol->type) {
                 case SymbolType::STRING: {
                     // TODO: strings
@@ -310,10 +333,10 @@ void VirtualMachine::step() {
         }
         case NEW_STRUCT: {
             auto &name = instruction.operands[0];
-            auto value = new Value();
-            auto structure = new Struct();
-            structure->typeName = name;
-            structure->fields = {};
+            auto value = newValue();
+            Struct structure = {};
+            structure.typeName = name;
+            structure.fields = {};
             value->v = structure;
             value->address = this->m_address;
             stack.push(value);
@@ -328,11 +351,11 @@ void VirtualMachine::step() {
         case READ_FIELD: {
             auto &name = instruction.operands[0];
             auto &typeName = instruction.operands[1];
-            auto v = get_if<Struct*>(&locals[m_staticNames.thisName]->v);
+            auto v = get_if<Struct>(&locals[m_staticNames.thisName]->v);
             ASSERT(v != nullptr, "'this' is not a structure");
             auto value = readStaticValue(instruction.operands[2]);
             this->m_address += value->size;
-            auto &f = (*v)->fields[name];
+            auto &f = (*v).fields[name];
             f.value = value;
             f.name = name;
             f.typeName = typeName;
@@ -344,31 +367,15 @@ void VirtualMachine::step() {
         COMPARE_CASE(LTE, Condition::LESS_EQUAL)
         COMPARE_CASE(GT, Condition::GREATER)
         COMPARE_CASE(GTE, Condition::GREATER_EQUAL)
-        case AND: {
-            auto b = vpop(stack);
-            auto a = vpop(stack);
-            auto res = new Value();
-            res->v = a->v.toBool() && b->v.toBool();
-            stack.push(res);
-            break;
-        }
-        case OR: {
-            auto b = vpop(stack);
-            auto a = vpop(stack);
-            auto res = new Value();
-            res->v = a->v.toBool() || b->v.toBool();
-            stack.push(res);
-            break;
-        }
         case NOT: {
-            auto a = vpop(stack);
-            auto res = new Value();
+            auto a = stack.pop();
+            auto res = newValue();
             res->v = !a->v.toBool();
             stack.push(res);
             break;
         }
         case CMP: {
-            auto b = vpop(stack);
+            auto b = stack.pop();
             auto res = get_if<bool>(&b->v);
             ASSERT(res != nullptr, "CMP: operand is not comparable (bool)");
             if(*res) frame->pc++;
@@ -385,7 +392,7 @@ void VirtualMachine::step() {
             break;
         }
         case EXPORT: {
-            auto pattern = convert(vpop(stack));
+            auto pattern = convert(stack.pop());
             pattern->setVariableName(lookupString(instruction.operands[0]));
             this->m_patterns.push_back(pattern);
             break;
@@ -408,8 +415,8 @@ void VirtualMachine::accessData(u64 address, void *buffer, size_t size, u64 sect
     }
 }
 
-Value* VirtualMachine::compare(Value* b, Value* a, Condition condition) {
-    auto res = new Value();
+Value VirtualMachine::compare(Value b, Value a, Condition condition) {
+    auto res = newValue();
     if(UNLIKELY(a == b)) { // same object
         res->v = true;
     } else if(a->v.index() == b->v.index()) { // same type, no conversion needed

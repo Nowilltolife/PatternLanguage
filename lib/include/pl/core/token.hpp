@@ -20,6 +20,12 @@ namespace pl::core {
 
     namespace ast { class ASTNode; }
 
+    enum ControlFlowStatement {
+        Break,
+        Continue,
+        Return
+    };
+
     class Token {
     public:
         Token() = default;

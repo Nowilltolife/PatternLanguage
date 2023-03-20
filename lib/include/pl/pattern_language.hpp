@@ -15,6 +15,8 @@
 
 #include <pl/api.hpp>
 
+#include <pl/core/bytecode/bytecode.hpp>
+#include "pl/core/vm.hpp"
 #include <pl/core/log_console.hpp>
 #include <pl/core/token.hpp>
 #include <pl/core/errors/error.hpp>
@@ -58,9 +60,11 @@ namespace pl {
             core::Parser          *parser;
             core::Validator       *validator;
             core::Evaluator       *evaluator;
+            core::VirtualMachine *vm;
         };
 
         [[nodiscard]] std::optional<std::vector<std::shared_ptr<core::ast::ASTNode>>> parseString(const std::string &code);
+        [[nodiscard]] pl::core::instr::Bytecode compile(const std::string &code);
         [[nodiscard]] bool executeString(std::string string, const std::map<std::string, core::Token::Literal> &envVars = {}, const std::map<std::string, core::Token::Literal> &inVariables = {}, bool checkResult = true);
         [[nodiscard]] bool executeFile(const std::filesystem::path &path, const std::map<std::string, core::Token::Literal> &envVars = {}, const std::map<std::string, core::Token::Literal> &inVariables = {}, bool checkResult = true);
         [[nodiscard]] std::pair<bool, std::optional<core::Token::Literal>> executeFunction(const std::string &code);

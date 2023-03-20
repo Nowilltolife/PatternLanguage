@@ -2,7 +2,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 
 #include <wolv/hash/crc.hpp>

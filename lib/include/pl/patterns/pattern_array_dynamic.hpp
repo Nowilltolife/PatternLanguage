@@ -8,7 +8,7 @@ namespace pl::ptrn {
                                 public Inlinable,
                                 public Iteratable {
     public:
-        PatternArrayDynamic(core::Evaluator *evaluator, u64 offset, size_t size)
+        PatternArrayDynamic(core::VirtualMachine *evaluator, u64 offset, size_t size)
             : Pattern(evaluator, offset, size) { }
 
         PatternArrayDynamic(const PatternArrayDynamic &other) : Pattern(other) {
@@ -99,18 +99,7 @@ namespace pl::ptrn {
         }
 
         void forEachEntry(u64 start, u64 end, const std::function<void(u64, Pattern*)>& fn) override {
-            auto evaluator = this->getEvaluator();
-            auto startArrayIndex = evaluator->getCurrentArrayIndex();
-
-            ON_SCOPE_EXIT {
-                if (startArrayIndex.has_value())
-                    evaluator->setCurrentArrayIndex(*startArrayIndex);
-                else
-                    evaluator->clearCurrentArrayIndex();
-            };
-
             for (u64 i = start; i < std::min<u64>(end, this->m_entries.size()); i++) {
-                evaluator->setCurrentArrayIndex(i);
                 if (!this->m_entries[i]->isPatternLocal())
                     fn(i, this->m_entries[i].get());
             }

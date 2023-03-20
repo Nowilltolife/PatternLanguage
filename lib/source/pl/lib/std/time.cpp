@@ -2,7 +2,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 
 #include <ctime>
@@ -53,7 +52,7 @@ namespace pl::lib::libstd::time {
             });
 
             /* to_local(time) */
-            runtime.addFunction(nsStdTime, "to_local", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdTime, "to_local", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 time_t time = params[0].toUnsigned();
 
                 try {
@@ -67,7 +66,7 @@ namespace pl::lib::libstd::time {
             });
 
             /* to_utc(time) */
-            runtime.addFunction(nsStdTime, "to_utc", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdTime, "to_utc", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 time_t time = params[0].toUnsigned();
 
                 try {
@@ -80,7 +79,7 @@ namespace pl::lib::libstd::time {
             });
 
             /* to_epoch(structured_time) */
-            runtime.addFunction(nsStdTime, "to_epoch", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdTime, "to_epoch", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 u128 structuredTime = params[0].toUnsigned();
 
                 tm time = unpackTMValue(structuredTime);
@@ -89,7 +88,7 @@ namespace pl::lib::libstd::time {
             });
 
             /* format(format_string, structured_time) */
-            runtime.addFunction(nsStdTime, "format", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdTime, "format", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto formatString = params[0].toString(false);
                 u128 structuredTime = params[1].toUnsigned();
 
