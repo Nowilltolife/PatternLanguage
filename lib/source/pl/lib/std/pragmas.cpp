@@ -19,7 +19,7 @@ std::optional<u64> parseLimit(const std::string &value) {
 namespace pl::lib::libstd {
     // TODO: Adapt to new vm system
     void registerPragmas(pl::PatternLanguage &runtime) {
-        hlp::unused(runtime);
+        wolv::util::unused(runtime);
         /*runtime.addPragma("endian", [](pl::PatternLanguage &runtime, const std::string &value) {
             if (value == "big") {
                 runtime.getInternals().evaluator->setDefaultEndian(std::endian::big);

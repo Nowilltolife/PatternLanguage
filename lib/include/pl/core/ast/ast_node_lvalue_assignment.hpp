@@ -38,7 +38,7 @@ namespace pl::core::ast {
         }
 
         void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
-            hlp::unused(bytecode);
+            wolv::util::unused(bytecode);
             m_rvalue->emit(bytecode, emitter);
             emitter.store_local(m_lvalueName, emitter.getLocalType(m_lvalueName));
         }

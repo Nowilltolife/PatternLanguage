@@ -151,7 +151,7 @@ namespace pl::lib::libstd::math {
             });
 
             /* accumulate(start, end, size, section, operation = Add, endian = Native) */
-            runtime.addFunction(nsStdMath, "accumulate", FunctionParameterCount::between(4, 6), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdMath, "accumulate", FunctionParameterCount::between(4, 6), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
                 auto start      = params[0].toUnsigned();
                 auto end        = params[1].toUnsigned();
                 auto size       = params[2].toUnsigned();

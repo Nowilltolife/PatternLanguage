@@ -31,7 +31,7 @@ namespace pl::core::ast {
         }
 
         virtual void emit(instr::Bytecode& bytecode, instr::BytecodeEmitter& emitter) {
-            hlp::unused(bytecode, emitter);
+            wolv::util::unused(bytecode, emitter);
             err::E0001.throwError("Non implemented instr emitter.", "This is a evaluator bug!", this);
         }
 

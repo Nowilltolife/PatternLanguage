@@ -3,27 +3,26 @@
 #include <span>
 #include <vector>
 
-#include <pl/core/evaluator.hpp>
-
 #include <wolv/io/buffered_reader.hpp>
+#include <pl/core/vm.hpp>
 
 namespace pl::hlp {
 
     struct ReaderData {
-        core::Evaluator *evaluator;
+        core::VirtualMachine *vm;
         u64 sectionId;
     };
 
     inline void evaluatorReaderFunction(ReaderData *data, void *buffer, u64 address, size_t size) {
-        data->evaluator->readData(address, buffer, size, data->sectionId);
+        data->vm->readData(address, buffer, size, data->sectionId);
     }
 
     class MemoryReader : public wolv::io::BufferedReader<ReaderData, evaluatorReaderFunction> {
     public:
         using BufferedReader::BufferedReader;
 
-        MemoryReader(core::Evaluator *evaluator, u64 sectionId, size_t bufferSize = 0x100000) : BufferedReader(&this->m_readerData, evaluator->getDataSize(), bufferSize) {
-            this->m_readerData.evaluator = evaluator;
+        MemoryReader(core::VirtualMachine *vm, u64 sectionId, size_t bufferSize = 0x100000) : BufferedReader(&this->m_readerData, vm->getDataSize(), bufferSize) {
+            this->m_readerData.vm = vm;
             this->m_readerData.sectionId = sectionId;
         }
 

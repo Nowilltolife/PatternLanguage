@@ -15,7 +15,7 @@ namespace pl::lib::libstd::hash {
         api::Namespace nsStdHash = { "builtin", "std", "hash" };
         {
             /* crc32(pattern, init, poly, xorout, reflect_in, reflect_out) */
-            runtime.addFunction(nsStdHash, "crc32", FunctionParameterCount::exactly(6), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdHash, "crc32", FunctionParameterCount::exactly(6), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
                 wolv::util::unused(ctx);
 
                 auto pattern = params[0].toPattern();

@@ -26,7 +26,7 @@ namespace pl::core::ast {
         }
 
         void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override{
-            hlp::unused(bytecode);
+            wolv::util::unused(bytecode);
             switch (m_operator) {
                 case Token::Operator::BoolEqual:
                     m_left->emit(bytecode, emitter);

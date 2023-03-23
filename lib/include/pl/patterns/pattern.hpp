@@ -354,7 +354,7 @@ namespace pl::ptrn {
                         }
                     }
                 } catch (core::err::EvaluatorError::Exception &error) {
-                    hlp::unused(error);
+                    wolv::util::unused(error);
                 }*/
             }
 
@@ -454,7 +454,7 @@ namespace pl::ptrn {
         [[nodiscard]] virtual std::string formatDisplayValue() = 0;
 
         [[nodiscard]] std::string formatDisplayValue(const std::string &value, const core::Token::Literal &literal) const {
-            hlp::unused(literal);
+            wolv::util::unused(literal);
             const auto &formatterFunctionName = this->getReadFormatterFunction();
             if (formatterFunctionName.empty())
                 return value;

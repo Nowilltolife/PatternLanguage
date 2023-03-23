@@ -30,7 +30,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* open(path, mode) */
-            runtime.addDangerousFunction(nsStdFile, "open", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "open", FunctionParameterCount::exactly(2), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto path     = params[0].toString(false);
                 const auto modeEnum = params[1].toUnsigned();
 
@@ -61,7 +61,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* close(file) */
-            runtime.addDangerousFunction(nsStdFile, "close", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "close", FunctionParameterCount::exactly(1), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
 
                 if (!openFiles.contains(file))
@@ -73,7 +73,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* read(file, size) */
-            runtime.addDangerousFunction(nsStdFile, "read", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "read", FunctionParameterCount::exactly(2), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
                 const auto size = params[1].toUnsigned();
 
@@ -86,7 +86,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* write(file, data) */
-            runtime.addDangerousFunction(nsStdFile, "write", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "write", FunctionParameterCount::exactly(2), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
                 const auto data = params[1].toString(true);
 
@@ -99,7 +99,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* seek(file, offset) */
-            runtime.addDangerousFunction(nsStdFile, "seek", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "seek", FunctionParameterCount::exactly(2), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
                 const auto offset = params[1].toUnsigned();
 
@@ -112,7 +112,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* size(file) */
-            runtime.addDangerousFunction(nsStdFile, "size", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "size", FunctionParameterCount::exactly(1), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
 
                 if (!openFiles.contains(file))
@@ -122,7 +122,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* resize(file, size) */
-            runtime.addDangerousFunction(nsStdFile, "resize", FunctionParameterCount::exactly(2), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "resize", FunctionParameterCount::exactly(2), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
                 const auto size = params[1].toUnsigned();
 
@@ -135,7 +135,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* flush(file) */
-            runtime.addDangerousFunction(nsStdFile, "flush", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "flush", FunctionParameterCount::exactly(1), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
 
                 if (!openFiles.contains(file))
@@ -147,7 +147,7 @@ namespace pl::lib::libstd::file {
             });
 
             /* remove(file) */
-            runtime.addDangerousFunction(nsStdFile, "remove", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
+            runtime.addDangerousFunction(nsStdFile, "remove", FunctionParameterCount::exactly(1), [](VirtualMachine*, auto params) -> std::optional<Token::Literal> {
                 const auto file = params[0].toUnsigned();
 
                 if (!openFiles.contains(file))

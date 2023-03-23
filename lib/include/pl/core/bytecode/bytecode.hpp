@@ -260,7 +260,7 @@ namespace pl::core::instr {
             : m_symbolTable(symbolTable), m_instructions(instructions) { }
 
         void store_field(const std::string& name, const std::string& typeName, bool slot0 = false) {
-            hlp::unused(this->addInstruction({
+            wolv::util::unused(this->addInstruction({
                                                      slot0 ? STORE_IN_THIS : STORE_FIELD,
                                                      {
                                                              this->m_symbolTable.newString(name),
@@ -270,7 +270,7 @@ namespace pl::core::instr {
         }
 
         void load_field(const std::string& name, bool slot0 = false) {
-            hlp::unused(this->addInstruction({
+            wolv::util::unused(this->addInstruction({
                                                      slot0 ? LOAD_FROM_THIS : LOAD_FIELD,
                                                      {
                                                              this->m_symbolTable.newString(name),
@@ -280,7 +280,7 @@ namespace pl::core::instr {
 
 
         void store_local(const std::string& name, const std::string& typeName) {
-            hlp::unused(this->addInstruction({
+            wolv::util::unused(this->addInstruction({
                                                      STORE_LOCAL,
                                                      {
                                                              this->m_symbolTable.newString(name),
@@ -290,19 +290,19 @@ namespace pl::core::instr {
         }
 
         void load_local(const std::string& name) {
-            hlp::unused(this->addInstruction({ LOAD_LOCAL, { this->m_symbolTable.newString(name) } }));
+            wolv::util::unused(this->addInstruction({ LOAD_LOCAL, { this->m_symbolTable.newString(name) } }));
         }
 
         void store_attribute(const std::string& name) {
-            hlp::unused(this->addInstruction({ STORE_ATTRIBUTE, { this->m_symbolTable.newString(name) } }));
+            wolv::util::unused(this->addInstruction({ STORE_ATTRIBUTE, { this->m_symbolTable.newString(name) } }));
         }
 
         void read_value(u16 type) {
-            hlp::unused(this->addInstruction({ READ_VALUE, { type }}));
+            wolv::util::unused(this->addInstruction({ READ_VALUE, { type }}));
         }
 
         void read_field(const std::string& name, const std::string& typeName, u16 type) {
-            hlp::unused(this->addInstruction({
+            wolv::util::unused(this->addInstruction({
                                                      READ_FIELD,
                                                      {
                                                              this->m_symbolTable.newString(name),
@@ -313,64 +313,64 @@ namespace pl::core::instr {
         }
 
         void load_symbol(u16 index) {
-            hlp::unused(this->addInstruction({ LOAD_SYMBOL, { index } }));
+            wolv::util::unused(this->addInstruction({ LOAD_SYMBOL, { index } }));
         }
 
         void new_struct(const std::string& name) {
-            hlp::unused(this->addInstruction({ NEW_STRUCT, { this->m_symbolTable.newString(name) } }));
+            wolv::util::unused(this->addInstruction({ NEW_STRUCT, { this->m_symbolTable.newString(name) } }));
         }
 
         void call(const std::string& name) {
-            hlp::unused(this->addInstruction({ CALL, { this->m_symbolTable.newString(name) } }));
+            wolv::util::unused(this->addInstruction({ CALL, { this->m_symbolTable.newString(name) } }));
         }
 
         void export_(const std::string& name) {
-            hlp::unused(this->addInstruction({ EXPORT , { this->m_symbolTable.newString(name) } }));
+            wolv::util::unused(this->addInstruction({ EXPORT , { this->m_symbolTable.newString(name) } }));
         }
 
         void dup() {
-            hlp::unused(this->addInstruction({ DUP }));
+            wolv::util::unused(this->addInstruction({ DUP }));
         }
 
         void pop() {
-            hlp::unused(this->addInstruction({ POP }));
+            wolv::util::unused(this->addInstruction({ POP }));
         }
 
         void cmp() {
-            hlp::unused(this->addInstruction({ CMP }));
+            wolv::util::unused(this->addInstruction({ CMP }));
         }
 
         void eq() {
-            hlp::unused(this->addInstruction({ EQ }));
+            wolv::util::unused(this->addInstruction({ EQ }));
         }
 
         void neq() {
-            hlp::unused(this->addInstruction({ NEQ }));
+            wolv::util::unused(this->addInstruction({ NEQ }));
         }
 
         void lt() {
-            hlp::unused(this->addInstruction({ LT }));
+            wolv::util::unused(this->addInstruction({ LT }));
         }
 
         void gt() {
-            hlp::unused(this->addInstruction({ GT }));
+            wolv::util::unused(this->addInstruction({ GT }));
         }
 
         void lte() {
-            hlp::unused(this->addInstruction({ LTE }));
+            wolv::util::unused(this->addInstruction({ LTE }));
         }
 
         void gte() {
-            hlp::unused(this->addInstruction({ GTE }));
+            wolv::util::unused(this->addInstruction({ GTE }));
         }
 
         void not_() {
-            hlp::unused(this->addInstruction({ NOT }));
+            wolv::util::unused(this->addInstruction({ NOT }));
         }
 
         void jmp(Label& label) {
             label.targets.emplace_back( this->m_instructions->size(), 0 );
-            hlp::unused(this->addInstruction({ JMP, { label.targetPc } }));
+            wolv::util::unused(this->addInstruction({ JMP, { label.targetPc } }));
         }
 
         auto label() {
@@ -388,7 +388,7 @@ namespace pl::core::instr {
         }
 
         void return_() {
-            hlp::unused(this->addInstruction({ RETURN }));
+            wolv::util::unused(this->addInstruction({ RETURN }));
         }
 
         void local(const std::string& name, const std::string& typeName) {

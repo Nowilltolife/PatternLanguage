@@ -37,6 +37,10 @@ namespace pl::core::ast {
             emitter.resolve_label(elseLabel);
         }
 
+        [[nodiscard]] const std::unique_ptr<ASTNode> &getCondition() const { return m_condition; }
+        [[nodiscard]] const std::vector<std::unique_ptr<ASTNode>> &getTrueBody() const { return m_trueBody; }
+        [[nodiscard]] const std::vector<std::unique_ptr<ASTNode>> &getFalseBody() const { return m_falseBody; }
+
     private:
         std::unique_ptr<ASTNode> m_condition;
         std::vector<std::unique_ptr<ASTNode>> m_trueBody, m_falseBody;

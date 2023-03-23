@@ -102,7 +102,7 @@ namespace pl::lib::libstd::core {
 
             /* array_index() -> index */
             runtime.addFunction(nsStdCore, "array_index", FunctionParameterCount::none(), [](VirtualMachine *ctx, auto) -> std::optional<Token::Literal> {
-                hlp::unused(ctx);
+                wolv::util::unused(ctx);
                 auto index = ctx->getCurrentArrayIndex();
 
                 if (index.has_value())

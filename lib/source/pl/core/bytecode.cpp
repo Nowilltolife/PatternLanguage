@@ -60,7 +60,7 @@ void variableRead(const ASTNodeVariableDecl* var, BytecodeEmitter &emitter, bool
 }
 
 void ASTNodeVariableDecl::emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) {
-    hlp::unused(bytecode);
+    wolv::util::unused(bytecode);
     if(emitter.flags.ctor) {
         variableRead(this, emitter, false);
         return;
@@ -85,7 +85,7 @@ void ASTNodeVariableDecl::emit(instr::Bytecode &bytecode, instr::BytecodeEmitter
 }
 
 void ASTNodeTypeDecl::emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) {
-    hlp::unused(emitter);
+    wolv::util::unused(emitter);
     if(this->m_valid) {
         if(auto structType = dynamic_cast<ASTNodeStruct*>(this->m_type.get()); structType != nullptr) {
             if(this->m_completed) {

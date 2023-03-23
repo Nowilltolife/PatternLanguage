@@ -186,6 +186,6 @@ namespace pl::core {
             GREATER_EQUAL
         };
 
-        static Value compare(Value b, Value a, Condition condition);
+        static Value compare(const Value& b, const Value& a, Condition condition);
     };
 }

@@ -57,7 +57,7 @@ namespace pl::lib::libstd::libstd {
         {
             /* print(format, args...) */
             runtime.addFunction(nsStd, "print", FunctionParameterCount::moreThan(0), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
-                hlp::unused(ctx, params);
+                wolv::util::unused(ctx, params);
                 //ctx->getConsole().log(LogConsole::Level::Info, format(params));
 
                 return std::nullopt;
@@ -70,7 +70,7 @@ namespace pl::lib::libstd::libstd {
 
             /* env(name) */
             runtime.addFunction(nsStd, "env", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
-                hlp::unused(ctx, params);
+                wolv::util::unused(ctx, params);
                 /*auto name = params[0].toString(false);
 
                 auto env = ctx->getEnvVariable(name);
@@ -97,7 +97,7 @@ namespace pl::lib::libstd::libstd {
 
             /* warning(message) */
             runtime.addFunction(nsStd, "warning", FunctionParameterCount::exactly(1), [](VirtualMachine *ctx, auto params) -> std::optional<Token::Literal> {
-                hlp::unused(ctx, params);
+                wolv::util::unused(ctx, params);
                 //ctx->getConsole().log(LogConsole::Level::Warning, params[0].toString(true));
 
                 return std::nullopt;

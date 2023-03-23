@@ -106,19 +106,19 @@ Value VirtualMachine::readStaticValue(u16 type) {
 std::shared_ptr<Pattern> VirtualMachine::convert(const Value& value) {
     auto a = std::visit(overloaded {
         [&](bool b) {
-            hlp::unused(b);
+            wolv::util::unused(b);
             return (std::shared_ptr<Pattern>) std::make_shared<PatternBoolean>(nullptr, value->address);
         },
         [&](double d) {
-            hlp::unused(d);
+            wolv::util::unused(d);
             return (std::shared_ptr<Pattern>) std::make_shared<PatternFloat>(nullptr, value->address, value->size);
         },
         [&](u128 v) {
-            hlp::unused(v);
+            wolv::util::unused(v);
             return (std::shared_ptr<Pattern>) std::make_shared<PatternUnsigned>(nullptr, value->address, value->size);
         },
         [&](i128 v) {
-            hlp::unused(v);
+            wolv::util::unused(v);
             return (std::shared_ptr<Pattern>) std::make_shared<PatternSigned>(nullptr, value->address, value->size);
         },
         [&](const Struct& strct) {
@@ -148,6 +148,7 @@ std::shared_ptr<Pattern> VirtualMachine::convert(const Value& value) {
         }
     }, value->v);
     a->setColor(getNextPalletColor());
+    a->setVm(this);
     return a;
 }
 
@@ -405,7 +406,7 @@ void VirtualMachine::step() {
 }
 
 void VirtualMachine::accessData(u64 address, void *buffer, size_t size, u64 sectionId, bool write) {
-    hlp::unused(sectionId);
+    wolv::util::unused(sectionId);
     if (size == 0 || buffer == nullptr)
         return;
     if (!write) {
@@ -415,7 +416,7 @@ void VirtualMachine::accessData(u64 address, void *buffer, size_t size, u64 sect
     }
 }
 
-Value VirtualMachine::compare(Value b, Value a, Condition condition) {
+Value VirtualMachine::compare(const Value& b, const Value& a, Condition condition) {
     auto res = newValue();
     if(UNLIKELY(a == b)) { // same object
         res->v = true;

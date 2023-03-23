@@ -19,7 +19,7 @@ namespace pl::core::ast {
         }
 
         void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
-            hlp::unused(bytecode);
+            wolv::util::unused(bytecode);
             if(Token::isUnsigned(m_literal.getType())) {
                 u16 symbol = bytecode.getSymbolTable().newUnsignedInteger(m_literal.toUnsigned());
                 emitter.load_symbol(symbol);

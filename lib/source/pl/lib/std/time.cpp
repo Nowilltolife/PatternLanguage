@@ -45,7 +45,7 @@ namespace pl::lib::libstd::time {
         api::Namespace nsStdTime = { "builtin", "std", "time" };
         {
             /* epoch() */
-            runtime.addFunction(nsStdTime, "epoch", FunctionParameterCount::exactly(0), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdTime, "epoch", FunctionParameterCount::exactly(0), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 wolv::util::unused(params);
 
                 return { std::time(nullptr) };

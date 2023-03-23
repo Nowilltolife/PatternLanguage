@@ -48,7 +48,7 @@ namespace pl::core::ast {
         }
 
         void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
-            hlp::unused(bytecode);
+            wolv::util::unused(bytecode);
             if(m_path.size() == 1) {
                 auto name = std::get<std::string>(m_path[0]);
                 emitter.flags.ctor ? emitter.load_field(name, true) : emitter.load_local(name);

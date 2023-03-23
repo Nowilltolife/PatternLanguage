@@ -17,7 +17,7 @@ namespace pl::core::ast {
 
     private:
         template<typename T>
-        T changeEndianess(Evaluator *evaluator, T value, size_t size, std::endian endian) const {
+        T changeEndianess(VirtualMachine *evaluator, T value, size_t size, std::endian endian) const {
             if (endian == evaluator->getDefaultEndian())
                 return value;
 

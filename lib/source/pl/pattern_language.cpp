@@ -79,7 +79,7 @@ namespace pl {
     }
 
     bool PatternLanguage::executeString(std::string code, const std::map<std::string, core::Token::Literal> &envVars, const std::map<std::string, core::Token::Literal> &inVariables, bool checkResult) {
-        hlp::unused(checkResult, envVars, inVariables);
+        wolv::util::unused(checkResult, envVars, inVariables);
         auto startTime = std::chrono::high_resolution_clock::now();
         ON_SCOPE_EXIT {
             auto endTime = std::chrono::high_resolution_clock::now();
@@ -189,7 +189,7 @@ namespace pl {
     }
 
     void PatternLanguage::setDataSource(u64 baseAddress, u64 size, std::function<void(u64, u8*, size_t)> readFunction, std::optional<std::function<void(u64, const u8*, size_t)>> writeFunction) const {
-        hlp::unused(baseAddress, size);
+        wolv::util::unused(baseAddress, size);
         this->m_internals.vm->setIOOperations({std::move(readFunction), writeFunction.value_or([](u64, const u8*, size_t) {})});
     }
 
@@ -210,7 +210,7 @@ namespace pl {
     }
 
     void PatternLanguage::setDangerousFunctionCallHandler(std::function<bool()> callback) const {
-        hlp::unused(callback);
+        wolv::util::unused(callback);
         // TODO: Dangerous function call handler
         //this->m_internals.evaluator->setDangerousFunctionCallHandler(std::move(callback));
     }
@@ -244,7 +244,7 @@ namespace pl {
     }
 
     const std::vector<u8>& PatternLanguage::getSection(u64 id) {
-        hlp::unused(id);
+        wolv::util::unused(id);
         // TODO: sections
         /*static std::vector<u8> empty;
         if (id > this->m_internals.evaluator->getSectionCount())
@@ -305,13 +305,13 @@ namespace pl {
     }*/
 
     void PatternLanguage::addFunction(const api::Namespace &ns, const std::string &name, api::FunctionParameterCount parameterCount, const api::FunctionCallback &func) const {
-        hlp::unused(ns, name, parameterCount, func);
+        wolv::util::unused(ns, name, parameterCount, func);
         // TODO: Builtin functions
         //this->m_internals.evaluator->addBuiltinFunction(getFunctionName(ns, name), parameterCount, { }, func, false);
     }
 
     void PatternLanguage::addDangerousFunction(const api::Namespace &ns, const std::string &name, api::FunctionParameterCount parameterCount, const api::FunctionCallback &func) const {
-        hlp::unused(ns, name, parameterCount, func);
+        wolv::util::unused(ns, name, parameterCount, func);
         // TODO: Dangerous functions
         //this->m_internals.evaluator->addBuiltinFunction(getFunctionName(ns, name), parameterCount, { }, func, true);
     }
