@@ -2,6 +2,7 @@
 
 #include <pl/core/ast/ast_node.hpp>
 #include <pl/core/ast/ast_node_attribute.hpp>
+#include <pl/core/ast/ast_node_bitfield_field.hpp>
 
 #include <pl/patterns/pattern_bitfield.hpp>
 
@@ -15,6 +16,8 @@ namespace pl::core::ast {
         ASTNodeBitfield(const ASTNodeBitfield &other) : ASTNode(other), Attributable(other) {
             for (const auto &entry : other.getEntries())
                 this->m_entries.emplace_back(entry->clone());
+
+            this->m_isNested = other.m_isNested;
         }
 
         [[nodiscard]] std::unique_ptr<ASTNode> clone() const override {
@@ -24,51 +27,45 @@ namespace pl::core::ast {
         [[nodiscard]] const std::vector<std::shared_ptr<ASTNode>> &getEntries() const { return this->m_entries; }
         void addEntry(std::unique_ptr<ASTNode> &&entry) { this->m_entries.emplace_back(std::move(entry)); }
 
+        void setNested() {
+            this->m_isNested = true;
+        }
+
         [[nodiscard]] std::vector<std::shared_ptr<ptrn::Pattern>> createPatterns(Evaluator *evaluator) const override {
             evaluator->updateRuntime(this);
 
-            auto bitfieldPattern = std::make_shared<ptrn::PatternBitfield>(evaluator, evaluator->dataOffset(), 0);
+            auto bitfieldPattern = std::make_shared<ptrn::PatternBitfield>(evaluator, evaluator->dataOffset(), evaluator->getBitfieldBitOffset(), 0);
 
-            size_t bitOffset = 0x00;
+            bitfieldPattern->setSection(evaluator->getSectionId());
+
+            if (this->hasAttribute("left_to_right", false))
+                bitfieldPattern->setEndian(std::endian::big);
+            else if (this->hasAttribute("right_to_left", false))
+                bitfieldPattern->setEndian(std::endian::little);
+            else if (evaluator->getBitfieldOrder().has_value()) {
+                switch (evaluator->getBitfieldOrder().value()) {
+                case BitfieldOrder::LeftToRight:
+                    bitfieldPattern->setEndian(std::endian::big);
+                    break;
+                case BitfieldOrder::RightToLeft:
+                    bitfieldPattern->setEndian(std::endian::little);
+                    break;
+                }
+            }
 
             std::vector<std::shared_ptr<ptrn::Pattern>> fields;
             std::vector<std::shared_ptr<ptrn::Pattern>> potentialPatterns;
 
-            BitfieldOrder order = evaluator->getBitfieldOrder();
-            if (this->hasAttribute("left_to_right", false))
-                order = BitfieldOrder::LeftToRight;
-            else if (this->hasAttribute("right_to_left", false))
-                order = BitfieldOrder::RightToLeft;
-
-            std::vector<ASTNode *> entries;
-            for (const auto &entry : this->m_entries)
-                entries.emplace_back(entry.get());
-
-            if (order == BitfieldOrder::LeftToRight)
-                std::reverse(entries.begin(), entries.end());
-
+            auto prevDefaultEndian = evaluator->getDefaultEndian();
             evaluator->pushScope(bitfieldPattern, potentialPatterns);
-            PL_ON_SCOPE_EXIT {
+            evaluator->setDefaultEndian(bitfieldPattern->getEndian());
+            ON_SCOPE_EXIT {
+                evaluator->setDefaultEndian(prevDefaultEndian);
                 evaluator->popScope();
             };
 
-            for (auto &entry : entries) {
+            for (auto &entry : this->m_entries) {
                 auto patterns = entry->createPatterns(evaluator);
-
-                for (auto &pattern : patterns) {
-                    if (auto bitfieldField = dynamic_cast<ptrn::PatternBitfieldField*>(pattern.get()); bitfieldField != nullptr) {
-                        if (bitfieldField->getSize() == 0) {
-                            bitfieldField->setBitOffset(bitOffset);
-                            bitfieldField->setSection(evaluator->getSectionId());
-                            bitOffset += bitfieldField->getBitSize();
-                            bitfieldField->setSize((bitOffset + 7) / 8);
-                        }
-
-                        applyVariableAttributes(evaluator, entry, pattern);
-                    }
-                    bitfieldPattern->setSize((bitOffset + 7) / 8);
-                }
-
                 std::move(patterns.begin(), patterns.end(), std::back_inserter(potentialPatterns));
 
                 if (!evaluator->getCurrentArrayIndex().has_value()) {
@@ -85,25 +82,41 @@ namespace pl::core::ast {
                 }
             }
 
-            for (auto &pattern : potentialPatterns) {
-                if (auto bitfieldField = dynamic_cast<ptrn::PatternBitfieldField*>(pattern.get()); bitfieldField != nullptr) {
-                    bitfieldField->setBitfield(bitfieldPattern.get());
-                    if (!bitfieldField->isPadding())
+            if (potentialPatterns.size() > 0) {
+                auto lastMemberIter = std::find_if(potentialPatterns.rbegin(), potentialPatterns.rend(), [](auto& pattern) {
+                    return dynamic_cast<ptrn::PatternBitfieldMember*>(pattern.get()) != nullptr;
+                });
+                if (lastMemberIter != potentialPatterns.rend()) {
+                    auto *lastMember = static_cast<ptrn::PatternBitfieldMember*>(lastMemberIter->get());
+                    auto totalBitSize = (lastMember->getTotalBitOffset() - bitfieldPattern->getTotalBitOffset()) + lastMember->getBitSize();
+                    bitfieldPattern->setBitSize(totalBitSize);
+                }
+
+                for (auto &pattern : potentialPatterns) {
+                    if (auto bitfieldMember = dynamic_cast<ptrn::PatternBitfieldMember*>(pattern.get()); bitfieldMember != nullptr) {
+                        bitfieldMember->setParentBitfield(bitfieldPattern.get());
+                        if (!bitfieldMember->isPadding())
+                            fields.push_back(std::move(pattern));
+                    } else {
                         fields.push_back(std::move(pattern));
+                    }
                 }
             }
 
             bitfieldPattern->setFields(fields);
 
-            evaluator->dataOffset() += bitfieldPattern->getSize();
-
             applyTypeAttributes(evaluator, this, bitfieldPattern);
+
+            if (!this->m_isNested)
+                evaluator->resetBitfieldBitOffset();
 
             return hlp::moveToVector<std::shared_ptr<ptrn::Pattern>>(std::move(bitfieldPattern));
         }
 
     private:
         std::vector<std::shared_ptr<ASTNode>> m_entries;
+
+        bool m_isNested = false;
     };
 
 }

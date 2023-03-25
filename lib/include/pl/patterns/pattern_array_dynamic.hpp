@@ -53,8 +53,7 @@ namespace pl::ptrn {
 
         void setSection(u64 id) override {
             for (auto &entry : this->m_entries)
-                if (entry->getSection() == ptrn::Pattern::MainSectionId)
-                    entry->setSection(id);
+                entry->setSection(id);
 
             Pattern::setSection(id);
         }
@@ -100,7 +99,7 @@ namespace pl::ptrn {
             auto evaluator = this->getEvaluator();
             auto startArrayIndex = evaluator->getCurrentArrayIndex();
 
-            PL_ON_SCOPE_EXIT {
+            ON_SCOPE_EXIT {
                 if (startArrayIndex.has_value())
                     evaluator->setCurrentArrayIndex(*startArrayIndex);
                 else

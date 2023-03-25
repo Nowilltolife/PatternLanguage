@@ -42,14 +42,14 @@ namespace pl::lib::libstd::mem {
 
             /* base_address() */
             runtime.addFunction(nsStdMem, "base_address", FunctionParameterCount::none(), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                hlp::unused(params);
+                wolv::util::unused(params);
 
                 return u128(ctx->getDataBaseAddress());
             });
 
             /* size() */
             runtime.addFunction(nsStdMem, "size", FunctionParameterCount::none(), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
-                hlp::unused(params);
+                wolv::util::unused(params);
 
                 return u128(ctx->getDataSize());
             });
@@ -125,6 +125,21 @@ namespace pl::lib::libstd::mem {
                 ctx->readData(address, result.data(), size, ptrn::Pattern::MainSectionId);
 
                 return result;
+            });
+
+
+            /* current_bit_offset() */
+            runtime.addFunction(nsStdMem, "current_bit_offset", FunctionParameterCount::none(), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+                wolv::util::unused(params);
+                return u128(ctx->getBitfieldBitOffset());
+            });
+
+            /* read_bits(byteOffset, bitOffset, bitSize) */
+            runtime.addFunction(nsStdMem, "read_bits", FunctionParameterCount::exactly(3), [](Evaluator *ctx, auto params) -> std::optional<Token::Literal> {
+                auto byteOffset = params[0].toUnsigned();
+                auto bitOffset = params[1].toUnsigned();
+                auto bitSize = params[2].toUnsigned();
+                return ctx->readBits(byteOffset, bitOffset, bitSize, ptrn::Pattern::MainSectionId, ctx->getDefaultEndian());
             });
 
 

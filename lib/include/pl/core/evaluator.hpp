@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_set>
+#include <unordered_map>
 
 #include <pl/core/log_console.hpp>
 #include <pl/core/token.hpp>
@@ -18,12 +19,16 @@ namespace pl::ptrn {
 
     class Pattern;
     class PatternCreationLimiter;
+    class PatternBitfieldField;
 
 }
 
 namespace pl::core {
 
-    namespace ast { class ASTNode; }
+    namespace ast {
+        class ASTNode;
+        class ASTNodeBitfieldField;
+    }
 
     enum class DangerousFunctionPermission {
         Ask,
@@ -209,15 +214,45 @@ namespace pl::core {
             return this->m_loopLimit;
         }
 
-        void setBitfieldOrder(BitfieldOrder order) {
+        void setBitfieldOrder(std::optional<BitfieldOrder> order) {
             this->m_bitfieldOrder = order;
         }
 
-        [[nodiscard]] BitfieldOrder getBitfieldOrder() {
+        [[nodiscard]] std::optional<BitfieldOrder> getBitfieldOrder() {
             return this->m_bitfieldOrder;
         }
 
         u64 &dataOffset() { return this->m_currOffset; }
+
+        u8 getBitfieldBitOffset() { return this->m_bitfieldBitOffset; }
+
+        void addToBitfieldBitOffset(u128 bitSize) {
+            this->dataOffset() += bitSize >> 3;
+            this->m_bitfieldBitOffset += bitSize & 0x7;
+
+            this->dataOffset() += this->m_bitfieldBitOffset >> 3;
+            this->m_bitfieldBitOffset &= 0x7;
+        }
+
+        void resetBitfieldBitOffset() {
+            if (m_bitfieldBitOffset != 0)
+                this->dataOffset()++;
+            this->m_bitfieldBitOffset = 0;
+        }
+
+        [[nodiscard]] u128 readBits(u128 byteOffset, u8 bitOffset, u64 bitSize, u64 section, std::endian endianness) {
+            u128 value = 0;
+
+            size_t readSize = (bitOffset + bitSize + 7) / 8;
+            readSize = std::min(readSize, sizeof(value));
+            this->readData(byteOffset, &value, readSize, section);
+            value = hlp::changeEndianess(value, sizeof(value), endianness);
+
+            size_t offset = endianness == std::endian::little ? bitOffset : (sizeof(value) * 8) - bitOffset - bitSize;
+            auto mask = (u128(1) << bitSize) - 1;
+            value = (value >> offset) & mask;
+            return value;
+        }
 
         bool addBuiltinFunction(const std::string &name, api::FunctionParameterCount numParams, std::vector<Token::Literal> defaultParameters, const api::FunctionCallback &function, bool dangerous) {
             const auto [iter, inserted] = this->m_builtinFunctions.insert({
@@ -265,8 +300,8 @@ namespace pl::core {
 
         void createParameterPack(const std::string &name, const std::vector<Token::Literal> &values);
 
-        void createArrayVariable(const std::string &name, ast::ASTNode *type, size_t entryCount, bool constant = false);
-        void createVariable(const std::string &name, ast::ASTNode *type, const std::optional<Token::Literal> &value = std::nullopt, bool outVariable = false, bool reference = false, bool templateVariable = false, bool constant = false);
+        void createArrayVariable(const std::string &name, ast::ASTNode *type, size_t entryCount, u64 section, bool constant = false);
+        std::shared_ptr<ptrn::Pattern> createVariable(const std::string &name, ast::ASTNode *type, const std::optional<Token::Literal> &value = std::nullopt, bool outVariable = false, bool reference = false, bool templateVariable = false, bool constant = false);
         std::shared_ptr<ptrn::Pattern>& getVariableByName(const std::string &name);
         void setVariable(const std::string &name, const Token::Literal &value);
         void setVariable(ptrn::Pattern *pattern, const Token::Literal &value);
@@ -397,7 +432,8 @@ namespace pl::core {
         std::function<void()> m_breakpointHitCallback = []{ };
         std::atomic<DangerousFunctionPermission> m_allowDangerousFunctions = DangerousFunctionPermission::Ask;
         ControlFlowStatement m_currControlFlowStatement = ControlFlowStatement::None;
-        BitfieldOrder m_bitfieldOrder = BitfieldOrder::RightToLeft;
+        std::optional<BitfieldOrder> m_bitfieldOrder;
+        u8 m_bitfieldBitOffset = 0;
 
         std::vector<std::shared_ptr<ptrn::Pattern>> m_patterns;
 

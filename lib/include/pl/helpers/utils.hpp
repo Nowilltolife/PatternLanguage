@@ -1,8 +1,5 @@
 #pragma once
 
-#include <pl/helpers/types.hpp>
-#include <pl/helpers/concepts.hpp>
-
 #include <array>
 #include <bit>
 #include <cstring>
@@ -16,28 +13,19 @@
 #include <variant>
 #include <vector>
 
+#include <pl/helpers/types.hpp>
+#include <pl/helpers/concepts.hpp>
+
+#include <wolv/utils/core.hpp>
+
 namespace pl::hlp {
-
-    [[noreturn]] inline void unreachable() {
-        __builtin_unreachable();
-    }
-
-    inline void unused(auto && ... x) {
-        ((void)x, ...);
-    }
-
 
     [[nodiscard]] std::string to_string(u128 value);
     [[nodiscard]] std::string to_string(i128 value);
 
-    [[nodiscard]] std::vector<u8> toBytes(const auto &value) {
-        std::vector<u8> bytes(sizeof(value));
-        std::memcpy(bytes.data(), &value, sizeof(value));
-        return bytes;
-    }
-
     [[nodiscard]] std::vector<u8> toMinimalBytes(const auto &value) {
-        auto bytes = toBytes(value);
+        auto bytesArray = wolv::util::toBytes(value);
+        auto bytes = std::vector<u8>(bytesArray.begin(), bytesArray.end());
 
         while (bytes.size() > 1 && bytes.back() == 0)
             bytes.pop_back();
@@ -54,39 +42,10 @@ namespace pl::hlp {
 
     std::string encodeByteString(const std::vector<u8> &bytes);
 
-    [[nodiscard]] constexpr inline u64 extract(u8 from, u8 to, const pl::unsigned_integral auto &value) {
-        if (from < to) std::swap(from, to);
-
-        using ValueType = std::remove_cvref_t<decltype(value)>;
-        ValueType mask  = (std::numeric_limits<ValueType>::max() >> (((sizeof(value) * 8) - 1) - (from - to))) << to;
-
-        return (value & mask) >> to;
-    }
-
-    [[nodiscard]] inline u64 extract(u32 from, u32 to, const std::vector<u8> &bytes) {
-        u8 index = 0;
-        while (from > 32 && to > 32) {
-            from -= 8;
-            to -= 8;
-            index++;
-        }
-
-        u64 value = 0;
-        std::memcpy(&value, &bytes[index], std::min(sizeof(value), bytes.size() - index));
-        u64 mask = (std::numeric_limits<u64>::max() >> (64 - (from + 1)));
-
-        return (value & mask) >> to;
-    }
-
     [[nodiscard]] constexpr inline i128 signExtend(size_t numBits, i128 value) {
-        i128 mask = 1ULL << u128(numBits - 1);
+        i128 mask = u128(1) << u128(numBits - 1);
         return (value ^ mask) - mask;
     }
-
-    template<class... Ts>
-    struct overloaded : Ts... { using Ts::operator()...; };
-    template<class... Ts>
-    overloaded(Ts...) -> overloaded<Ts...>;
 
     template<size_t Size>
     struct SizeTypeImpl { };
@@ -148,17 +107,6 @@ namespace pl::hlp {
         return result;
     }
 
-    [[nodiscard]] inline std::string trim(std::string s) {
-        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](u8 ch) {
-            return !std::isspace(ch) && ch >= 0x20;
-        }));
-        s.erase(std::find_if(s.rbegin(), s.rend(), [](u8 ch) {
-            return !std::isspace(ch) && ch >= 0x20;
-        }).base(), s.end());
-
-        return s;
-    }
-
     [[nodiscard]] float float16ToFloat32(u16 float16);
 
     [[nodiscard]] inline bool containsIgnoreCase(const std::string &a, const std::string &b) {
@@ -167,16 +115,6 @@ namespace pl::hlp {
         });
 
         return iter != a.end();
-    }
-
-    [[nodiscard]] std::string replaceAll(std::string string, const std::string &search, const std::string &replace);
-    [[nodiscard]] std::vector<std::string> splitString(const std::string &string, const std::string &delimiter);
-
-    [[nodiscard]] constexpr inline size_t strnlen(const char *s, size_t n) {
-        size_t i = 0;
-        while (i < n && s[i] != '\x00') i++;
-
-        return i;
     }
 
 }

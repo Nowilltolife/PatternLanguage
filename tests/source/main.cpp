@@ -3,7 +3,8 @@
 #include <cstdlib>
 
 #include <pl/helpers/utils.hpp>
-#include <pl/helpers/file.hpp>
+#include <wolv/io/file.hpp>
+#include <wolv/utils/guards.hpp>
 
 #include <pl/pattern_language.hpp>
 #include <pl/core/evaluator.hpp>
@@ -36,7 +37,7 @@ int runTests(int argc, char **argv) {
     const auto &currTest = testPatterns[testName];
     bool failing         = currTest->getMode() == Mode::Failing;
 
-    hlp::fs::File testData("test_data", hlp::fs::File::Mode::Read);
+    wolv::io::File testData("test_data", wolv::io::File::Mode::Read);
     pl::PatternLanguage runtime;
     runtime.setDataSource(0x00, testData.getSize(), [&testData](u64 offset, u8 *buffer, u64 size) {
         testData.seek(offset);
@@ -115,7 +116,7 @@ int main(int argc, char **argv) {
             break;
     }
 
-    PL_ON_SCOPE_EXIT {
+    ON_SCOPE_EXIT {
         for (auto &[key, value] : TestPattern::getTests())
             delete value;
     };

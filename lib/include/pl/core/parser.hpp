@@ -45,7 +45,8 @@ namespace pl::core {
         std::vector<std::vector<std::string>> m_currNamespace;
 
         std::vector<std::string> m_globalDocComments;
-        bool m_ignoreDocs = false;
+        i32 m_ignoreDocsCount = 0;
+        std::vector<TokenIter> m_processedDocComments;
 
         void addGlobalDocComment(const std::string &comment) {
             this->m_globalDocComments.push_back(comment);
@@ -142,15 +143,17 @@ namespace pl::core {
         std::unique_ptr<ast::ASTNode> parseFunctionForLoop();
 
         void parseAttribute(ast::Attributable *currNode);
-        std::unique_ptr<ast::ASTNode> parseConditional();
+        std::unique_ptr<ast::ASTNode> parseConditional(const std::function<std::unique_ptr<ast::ASTNode>()> &memberParser);
         std::pair<std::unique_ptr<ast::ASTNode>, bool> parseCaseParameters(std::vector<std::unique_ptr<ast::ASTNode>> &condition);
-        std::unique_ptr<ast::ASTNode> parseMatchStatement();
+        std::unique_ptr<ast::ASTNode> parseMatchStatement(const std::function<std::unique_ptr<ast::ASTNode>()> &memberParser);
         std::unique_ptr<ast::ASTNode> parseWhileStatement();
+        std::unique_ptr<ast::ASTNodeTypeDecl> getCustomType(std::string baseTypeName);
+        std::unique_ptr<ast::ASTNodeTypeDecl> parseCustomType();
+        void parseCustomTypeParameters(std::unique_ptr<ast::ASTNodeTypeDecl> &type);
         std::unique_ptr<ast::ASTNodeTypeDecl> parseType();
         std::vector<std::shared_ptr<ast::ASTNode>> parseTemplateList();
         std::shared_ptr<ast::ASTNodeTypeDecl> parseUsingDeclaration();
         std::unique_ptr<ast::ASTNode> parsePadding();
-        std::unique_ptr<ast::ASTNodeTypeDecl> parsePointerSizeType();
         std::unique_ptr<ast::ASTNode> parseMemberVariable(const std::shared_ptr<ast::ASTNodeTypeDecl> &type, bool allowSection, bool constant, const std::string &identifier);
         std::unique_ptr<ast::ASTNode> parseMemberArrayVariable(const std::shared_ptr<ast::ASTNodeTypeDecl> &type, bool allowSection, bool constant);
         std::unique_ptr<ast::ASTNode> parseMemberPointerVariable(const std::shared_ptr<ast::ASTNodeTypeDecl> &type);
@@ -228,7 +231,7 @@ namespace pl::core {
             else if constexpr (S == Not)
                 return false;
             else
-                hlp::unreachable();
+                std::unreachable();
         }
 
         template<Setting S = Normal>
@@ -259,7 +262,7 @@ namespace pl::core {
                 partReset();
                 return false;
             } else
-                hlp::unreachable();
+                std::unreachable();
         }
 
         template<Setting S = Normal>
@@ -274,7 +277,7 @@ namespace pl::core {
             else if constexpr (S == Not)
                 return true;
             else
-                hlp::unreachable();
+                std::unreachable();
         }
 
         template<Setting S = Normal>
@@ -284,7 +287,7 @@ namespace pl::core {
             else if constexpr (S == Not)
                 return sequenceImpl<Not>(token) && oneOfImpl(args...);
             else
-                hlp::unreachable();
+                std::unreachable();
         }
 
         template<Setting S = Normal>
@@ -324,33 +327,53 @@ namespace pl::core {
 
         bool peek(const Token &token, i32 index = 0) {
             if (index >= 0) {
-                while (this->m_curr[0].type == Token::Type::DocComment)
+                while (this->m_curr->type == Token::Type::DocComment) {
+                    if (auto docComment = getDocComment(true); docComment.has_value())
+                        this->addGlobalDocComment(docComment->comment);
                     this->m_curr++;
+                }
             } else {
-                while (this->m_curr[0].type == Token::Type::DocComment)
+                while (this->m_curr->type == Token::Type::DocComment) {
+                    if (auto docComment = getDocComment(true); docComment.has_value())
+                        this->addGlobalDocComment(docComment->comment);
                     this->m_curr--;
+                }
             }
 
             return this->m_curr[index].type == token.type && this->m_curr[index] == token.value;
         }
 
-        std::optional<Token::DocComment> getDocComment() {
+        std::optional<Token::DocComment> getDocComment(bool global) {
             auto token = this->m_curr;
 
-            while (true) {
-                if (token[0].type == Token::Type::DocComment) {
-                    auto content = std::get<Token::DocComment>(token[0].value);
+            auto commentProcessGuard = SCOPE_GUARD {
+                this->m_processedDocComments.push_back(token);
+            };
 
-                    auto trimmed = hlp::trim(content.comment);
+            if (token != this->m_startToken)
+                token--;
+
+            while (true) {
+                if (token->type == Token::Type::DocComment) {
+                    if (std::find(this->m_processedDocComments.begin(), this->m_processedDocComments.end(), token) != this->m_processedDocComments.end())
+                        return std::nullopt;
+
+                    auto content = std::get<Token::DocComment>(token->value);
+                    if (content.global != global)
+                        return std::nullopt;
+
+                    auto trimmed = wolv::util::trim(content.comment);
                     if (trimmed.starts_with("DOCS IGNORE ON")) {
-                        this->m_ignoreDocs = true;
+                        this->m_ignoreDocsCount += 1;
                         return std::nullopt;
                     } else if (trimmed.starts_with("DOCS IGNORE OFF")) {
-                        this->m_ignoreDocs = false;
+                        if (this->m_ignoreDocsCount == 0)
+                            err::P0002.throwError("Unmatched DOCS IGNORE OFF without previous DOCS IGNORE ON", "", 0);
+                        this->m_ignoreDocsCount -= 1;
                         return std::nullopt;
                     }
 
-                    if (this->m_ignoreDocs)
+                    if (this->m_ignoreDocsCount > 0)
                         return std::nullopt;
                     else
                         return content;
@@ -361,6 +384,8 @@ namespace pl::core {
                 else
                     break;
             }
+
+            commentProcessGuard.release();
 
             return std::nullopt;
         }

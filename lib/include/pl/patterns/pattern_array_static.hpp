@@ -24,7 +24,6 @@ namespace pl::ptrn {
             std::shared_ptr<Pattern> highlightTemplate = this->m_template->clone();
             highlightTemplate->setOffset(this->getOffset() + index * highlightTemplate->getSize());
 
-            this->m_highlightTemplates.push_back(highlightTemplate);
             return highlightTemplate;
         }
 
@@ -35,7 +34,7 @@ namespace pl::ptrn {
         void forEachEntry(u64 start, u64 end, const std::function<void(u64, Pattern*)>& fn) override {
             auto evaluator = this->getEvaluator();
             auto startArrayIndex = evaluator->getCurrentArrayIndex();
-            PL_ON_SCOPE_EXIT {
+            ON_SCOPE_EXIT {
                 if (startArrayIndex.has_value())
                     evaluator->setCurrentArrayIndex(*startArrayIndex);
                 else

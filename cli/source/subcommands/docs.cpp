@@ -1,6 +1,7 @@
 #include <pl/pattern_language.hpp>
 #include <pl/core/parser.hpp>
-#include <pl/helpers/file.hpp>
+
+#include <wolv/io/file.hpp>
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
@@ -17,14 +18,27 @@ namespace pl::cli::sub {
 
     namespace {
 
+        std::string getTypeEndian(const core::ast::ASTNodeTypeDecl *typeDecl) {
+            auto endian = typeDecl->getEndian();
+
+            if (!endian.has_value())
+                return "";
+            else if (endian == std::endian::little)
+                return "le";
+            else if (endian == std::endian::big)
+                return "be";
+            else
+                return "";
+        }
+
         std::string getTypeName(const core::ast::ASTNode *type) {
             if (auto builtinType = dynamic_cast<const core::ast::ASTNodeBuiltinType*>(type))
                 return core::Token::getTypeName(builtinType->getType());
             else if (auto typeDecl = dynamic_cast<const core::ast::ASTNodeTypeDecl*>(type)) {
                 if (typeDecl->getName().empty())
-                    return getTypeName(typeDecl->getType().get());
+                    return getTypeEndian(typeDecl) + " " + getTypeName(typeDecl->getType().get());
                 else
-                    return typeDecl->getName();
+                    return getTypeEndian(typeDecl) + " " + typeDecl->getName();
             } else {
                 return "???";
             }
@@ -73,15 +87,15 @@ namespace pl::cli::sub {
 
         std::string generateTypeDocumentation(const std::string &name, const core::ast::ASTNodeTypeDecl *type) {
             if (auto typeDecl = dynamic_cast<core::ast::ASTNodeTypeDecl*>(type->getType().get())) {
-                return fmt::format("```pat\nusing {}{} = {}{};\n```", name, generateTemplateParams(type), getTypeName(typeDecl), generateAttributes(typeDecl));
+                return fmt::format("```rust\nusing {}{} = {}{};\n```", name, generateTemplateParams(type), getTypeName(typeDecl), generateAttributes(typeDecl));
             } else if (dynamic_cast<core::ast::ASTNodeStruct*>(type->getType().get())) {
-                return fmt::format("```pat\nstruct {}{} {{ ... }}{};\n```", name, generateTemplateParams(type), generateAttributes(type));
+                return fmt::format("```rust\nstruct {}{} {{ ... }}{};\n```", name, generateTemplateParams(type), generateAttributes(type));
             } else if (dynamic_cast<core::ast::ASTNodeUnion*>(type->getType().get())) {
-                return fmt::format("```pat\nunion {}{} {{ ... }}{};\n```", name, generateTemplateParams(type), generateAttributes(type));
+                return fmt::format("```rust\nunion {}{} {{ ... }}{};\n```", name, generateTemplateParams(type), generateAttributes(type));
             } else if (dynamic_cast<core::ast::ASTNodeBitfield*>(type->getType().get())) {
-                return fmt::format("```pat\nbitfield {}{} {{ ... }}{};\n```", name, generateTemplateParams(type), generateAttributes(type));
+                return fmt::format("```rust\nbitfield {}{} {{ ... }}{};\n```", name, generateTemplateParams(type), generateAttributes(type));
             } else if (auto enumDecl = dynamic_cast<core::ast::ASTNodeEnum*>(type->getType().get())) {
-                auto result = fmt::format("```pat\nenum {}{} : {} {{\n", name, generateTemplateParams(type), getTypeName(enumDecl->getUnderlyingType().get()));
+                auto result = fmt::format("```rust\nenum {}{} : {} {{\n", name, generateTemplateParams(type), getTypeName(enumDecl->getUnderlyingType().get()));
                 for (auto &[enumValueName, enumValues] : enumDecl->getEntries()) {
                     result += fmt::format("    {},\n", enumValueName);
                 }
@@ -127,7 +141,7 @@ namespace pl::cli::sub {
             runtime.setIncludePaths(includePaths);
 
             // Execute pattern file
-            hlp::fs::File patternFile(patternFilePath, hlp::fs::File::Mode::Read);
+            wolv::io::File patternFile(patternFilePath, wolv::io::File::Mode::Read);
 
             auto ast = runtime.parseString(patternFile.readString());
             if (!ast.has_value()) {
@@ -137,15 +151,16 @@ namespace pl::cli::sub {
             }
 
             // Output documentation
-            std::string documentation = fmt::format("# `{}`\n", patternFilePath.stem().string());
+            std::string documentation = fmt::format("# {}\n", patternFilePath.stem().string());
             {
                 // Add global documentation
                 for (auto comment : runtime.getInternals().parser->getGlobalDocComments()) {
-                    comment = hlp::trim(comment);
+                    comment = wolv::util::trim(comment);
                     if (comment.starts_with('*'))
                         comment = comment.substr(1);
 
-                    documentation += fmt::format("**{}**\n", hlp::trim(comment));
+                    for (const auto &line : wolv::util::splitString(comment, "\n"))
+                        documentation += fmt::format("{}\n", wolv::util::trim(line));
                 }
 
                 {
@@ -156,26 +171,26 @@ namespace pl::cli::sub {
                         if (hideImplementationDetails && name.contains("impl::"))
                             continue;
 
-                        sectionContent += fmt::format("### **{}**\n", name);
+                        sectionContent += fmt::format("### `{}`\n", name);
 
-                        for (auto line : hlp::splitString(type->getDocComment(), "\n")) {
-                            line = hlp::trim(line);
+                        for (auto line : wolv::util::splitString(type->getDocComment(), "\n")) {
+                            line = wolv::util::trim(line);
                             if (line.starts_with('*'))
                                 line = line.substr(1);
-                            line = hlp::trim(line);
+                            line = wolv::util::trim(line);
 
                             if (line.starts_with('@')) {
                                 line = line.substr(1);
 
                                 if (line.starts_with("tparam ")) {
-                                    line = line.substr(5);
-                                    line = hlp::trim(line);
+                                    line = line.substr(6);
+                                    line = wolv::util::trim(line);
 
                                     if (line.empty())
                                         continue;
 
-                                    auto paramName = hlp::splitString(line, " ")[0];
-                                    sectionContent += fmt::format("- `<{}>`: {}\n", paramName, hlp::trim(line.substr(paramName.size())));
+                                    auto paramName = wolv::util::splitString(line, " ")[0];
+                                    sectionContent += fmt::format("- `<{}>`: {}\n", paramName, wolv::util::trim(line.substr(paramName.size())));
                                 } else if (line.starts_with("internal ")) {
                                     goto skip_type;
                                 }
@@ -184,7 +199,7 @@ namespace pl::cli::sub {
                             }
                         }
 
-                        sectionContent += generateTypeDocumentation(hlp::splitString(name, "::").back(), type.get()) + "\n";
+                        sectionContent += generateTypeDocumentation(wolv::util::splitString(name, "::").back(), type.get()) + "\n";
 
                         skip_type:;
                     }
@@ -208,29 +223,29 @@ namespace pl::cli::sub {
                             if (hideImplementationDetails && name.contains("impl::"))
                                 continue;
 
-                            sectionContent += fmt::format("### **{}**\n", name);
+                            sectionContent += fmt::format("### `{}`\n", name);
 
-                            for (auto line : hlp::splitString(functionDecl->getDocComment(), "\n")) {
-                                line = hlp::trim(line);
+                            for (auto line : wolv::util::splitString(functionDecl->getDocComment(), "\n")) {
+                                line = wolv::util::trim(line);
                                 if (line.starts_with('*'))
                                     line = line.substr(1);
-                                line = hlp::trim(line);
+                                line = wolv::util::trim(line);
 
                                 if (line.starts_with('@')) {
                                     line = line.substr(1);
 
                                     if (line.starts_with("param ")) {
                                         line = line.substr(5);
-                                        line = hlp::trim(line);
+                                        line = wolv::util::trim(line);
 
                                         if (line.empty())
                                             continue;
 
-                                        auto paramName = hlp::splitString(line, " ")[0];
-                                        sectionContent += fmt::format("- `{}`: {}\n", paramName, hlp::trim(line.substr(paramName.size())));
+                                        auto paramName = wolv::util::splitString(line, " ")[0];
+                                        sectionContent += fmt::format("- `{}`: {}\n", paramName, wolv::util::trim(line.substr(paramName.size())));
                                     } else if (line.starts_with("return ")) {
                                         line = line.substr(6);
-                                        line = hlp::trim(line);
+                                        line = wolv::util::trim(line);
 
                                         sectionContent += fmt::format("- `return`: {}\n", line);
                                     } else if (line.starts_with("internal ")) {
@@ -241,8 +256,8 @@ namespace pl::cli::sub {
                                 }
                             }
 
-                            sectionContent += "\n```pat\n";
-                            sectionContent += fmt::format("fn {}(", hlp::splitString(functionDecl->getName(), "::").back());
+                            sectionContent += "\n```rust\n";
+                            sectionContent += fmt::format("fn {}(", wolv::util::splitString(functionDecl->getName(), "::").back());
 
                             const auto &params = functionDecl->getParams();
                             for (const auto &[paramName, paramType] : params) {
@@ -273,9 +288,9 @@ namespace pl::cli::sub {
                 }
             }
 
-            hlp::fs::createDirectories(outputFilePath.parent_path());
-            hlp::fs::File outputFile(outputFilePath, hlp::fs::File::Mode::Create);
-            outputFile.write(documentation);
+            wolv::io::fs::createDirectories(outputFilePath.parent_path());
+            wolv::io::File outputFile(outputFilePath, wolv::io::File::Mode::Create);
+            outputFile.writeString(documentation);
         });
     }
 

@@ -3,6 +3,7 @@
 #include <pl/core/ast/ast_node_array_variable_decl.hpp>
 #include <pl/core/ast/ast_node_attribute.hpp>
 #include <pl/core/ast/ast_node_bitfield.hpp>
+#include <pl/core/ast/ast_node_bitfield_array_variable_decl.hpp>
 #include <pl/core/ast/ast_node_bitfield_field.hpp>
 #include <pl/core/ast/ast_node_builtin_type.hpp>
 #include <pl/core/ast/ast_node_cast.hpp>
@@ -192,12 +193,10 @@ namespace pl::core {
             if (MATCHES(oneOf(tkn::Literal::Identifier))) {
                 auto startToken = this->m_curr;
                 if (op == Token::Operator::SizeOf) {
-                    for (const auto &potentialTypes : getNamespacePrefixedNames(parseNamespaceResolution())) {
-                        if (this->m_types.contains(potentialTypes)) {
-                            this->m_curr = startToken - 1;
-                            result = create<ast::ASTNodeTypeOperator>(op, parseType());
-                            break;
-                        }
+                    auto type = getCustomType(parseNamespaceResolution());
+                    if (type != nullptr) {
+                        parseCustomTypeParameters(type);
+                        result = create<ast::ASTNodeTypeOperator>(op, move(type));
                     }
                 }
 
@@ -743,7 +742,7 @@ namespace pl::core {
     /* Control flow */
 
     // if ((parseMathematicalExpression)) { (parseMember) }
-    std::unique_ptr<ast::ASTNode> Parser::parseConditional() {
+    std::unique_ptr<ast::ASTNode> Parser::parseConditional(const std::function<std::unique_ptr<ast::ASTNode>()> &memberParser) {
         if (!MATCHES(sequence(tkn::Separator::LeftParenthesis)))
             err::P0002.throwError(fmt::format("Expected '(' after 'if', got {}.", getFormattedToken(0)), {}, 1);
 
@@ -752,19 +751,19 @@ namespace pl::core {
 
         if (MATCHES(sequence(tkn::Separator::RightParenthesis, tkn::Separator::LeftBrace))) {
             while (!MATCHES(sequence(tkn::Separator::RightBrace))) {
-                trueBody.push_back(parseMember());
+                trueBody.push_back(memberParser());
             }
         } else if (MATCHES(sequence(tkn::Separator::RightParenthesis))) {
-            trueBody.push_back(parseMember());
+            trueBody.push_back(memberParser());
         } else
             err::P0002.throwError(fmt::format("Expected ')' after if head, got {}.", getFormattedToken(0)), {}, 1);
 
         if (MATCHES(sequence(tkn::Keyword::Else, tkn::Separator::LeftBrace))) {
             while (!MATCHES(sequence(tkn::Separator::RightBrace))) {
-                falseBody.push_back(parseMember());
+                falseBody.push_back(memberParser());
             }
         } else if (MATCHES(sequence(tkn::Keyword::Else))) {
-            falseBody.push_back(parseMember());
+            falseBody.push_back(memberParser());
         }
 
         return create<ast::ASTNodeConditionalStatement>(std::move(condition), std::move(trueBody), std::move(falseBody));
@@ -843,7 +842,7 @@ namespace pl::core {
     }
 
     // match ((parseParameters)) { (parseParameters { (parseMember) })*, default { (parseMember) } }
-    std::unique_ptr<ast::ASTNode> Parser::parseMatchStatement() {
+    std::unique_ptr<ast::ASTNode> Parser::parseMatchStatement(const std::function<std::unique_ptr<ast::ASTNode>()> &memberParser) {
         if (!MATCHES(sequence(tkn::Separator::LeftParenthesis)))
             err::P0002.throwError(fmt::format("Expected '(' after 'match', got {}.", getFormattedToken(0)), {}, 1);
 
@@ -864,10 +863,10 @@ namespace pl::core {
 
             if (MATCHES(sequence(tkn::Operator::Colon, tkn::Separator::LeftBrace))) {
                 while (!MATCHES(sequence(tkn::Separator::RightBrace))) {
-                    body.push_back(parseMember());
+                    body.push_back(memberParser());
                 }
             } else if (MATCHES(sequence(tkn::Operator::Colon))) {
-                body.push_back(parseMember());
+                body.push_back(memberParser());
             } else
                 err::P0002.throwError(fmt::format("Expected ':' after case condition, got {}.", getFormattedToken(0)), {}, 1);
 
@@ -895,78 +894,97 @@ namespace pl::core {
 
     /* Type declarations */
 
+    std::unique_ptr<ast::ASTNodeTypeDecl> Parser::getCustomType(std::string baseTypeName) {
+        if (!this->m_currTemplateType.empty())
+            for (const auto &templateParameter : this->m_currTemplateType.front()->getTemplateParameters()) {
+                if (auto templateType = dynamic_cast<ast::ASTNodeTypeDecl*>(templateParameter.get()); templateType != nullptr)
+                    if (templateType->getName() == baseTypeName)
+                        return create<ast::ASTNodeTypeDecl>("", templateParameter);
+            }
+
+        for (const auto &typeName : getNamespacePrefixedNames(baseTypeName)) {
+            if (this->m_types.contains(typeName))
+                return create<ast::ASTNodeTypeDecl>("", this->m_types[typeName]);
+        }
+
+        return nullptr;
+    }
+
+    // <Identifier[, Identifier]>
+    void Parser::parseCustomTypeParameters(std::unique_ptr<ast::ASTNodeTypeDecl> &type) {
+        if (auto actualType = dynamic_cast<ast::ASTNodeTypeDecl*>(type->getType().get()); actualType != nullptr)
+            if (const auto &templateTypes = actualType->getTemplateParameters(); !templateTypes.empty()) {
+                if (!MATCHES(sequence(tkn::Operator::BoolLessThan)))
+                    err::P0002.throwError("Cannot use template type without template parameters.", {}, 1);
+
+                u32 index = 0;
+                do {
+                    if (index >= templateTypes.size())
+                        err::P0002.throwError(fmt::format("Provided more template parameters than expected. Type only has {} parameters", templateTypes.size()), {}, 1);
+
+                    auto parameter = templateTypes[index];
+                    if (auto type = dynamic_cast<ast::ASTNodeTypeDecl*>(parameter.get()); type != nullptr) {
+                        auto newType = parseType();
+                        if (newType->isForwardDeclared())
+                            err::P0002.throwError("Cannot use forward declared type as template parameter.", {}, 1);
+
+                        type->setType(std::move(newType), true);
+                        type->setName("");
+                    } else if (auto value = dynamic_cast<ast::ASTNodeLValueAssignment*>(parameter.get()); value != nullptr) {
+                        value->setRValue(parseMathematicalExpression(true));
+                    } else
+                        err::P0002.throwError("Invalid template parameter type.", {}, 1);
+
+                    index++;
+                } while (MATCHES(sequence(tkn::Separator::Comma)));
+
+                if (index < templateTypes.size())
+                    err::P0002.throwError(fmt::format("Not enough template parameters provided, expected {} parameters.", templateTypes.size()), {}, 1);
+
+                if (!MATCHES(sequence(tkn::Operator::BoolGreaterThan)))
+                    err::P0002.throwError(fmt::format("Expected '>' to close template list, got {}.", getFormattedToken(0)), {}, 1);
+
+                type = std::unique_ptr<ast::ASTNodeTypeDecl>(static_cast<ast::ASTNodeTypeDecl*>(type->clone().release()));
+            }
+    }
+
+    // Identifier
+    std::unique_ptr<ast::ASTNodeTypeDecl> Parser::parseCustomType() {
+        auto baseTypeName = parseNamespaceResolution();
+        auto type = getCustomType(baseTypeName);
+
+        if (type == nullptr)
+            err::P0003.throwError(fmt::format("Type {} has not been declared yet.", baseTypeName), fmt::format("If this type is being declared further down in the code, consider forward declaring it with 'using {};'.", baseTypeName), 1);
+
+        parseCustomTypeParameters(type);
+
+        return type;
+    }
+
     // [be|le] <Identifier|u8|u16|u24|u32|u48|u64|u96|u128|s8|s16|s24|s32|s48|s64|s96|s128|float|double|str>
     std::unique_ptr<ast::ASTNodeTypeDecl> Parser::parseType() {
-        std::optional<std::endian> endian;
-
         bool reference = MATCHES(sequence(tkn::Keyword::Reference));
 
+        std::optional<std::endian> endian;
         if (MATCHES(sequence(tkn::Keyword::LittleEndian)))
             endian = std::endian::little;
         else if (MATCHES(sequence(tkn::Keyword::BigEndian)))
             endian = std::endian::big;
 
+        std::unique_ptr<ast::ASTNodeTypeDecl> result = nullptr;
         if (MATCHES(sequence(tkn::Literal::Identifier))) {    // Custom type
-            auto baseTypeName = parseNamespaceResolution();
-
-            std::unique_ptr<ast::ASTNodeTypeDecl> foundType = nullptr;
-
-            if (!this->m_currTemplateType.empty())
-                for (const auto &templateParameter : this->m_currTemplateType.front()->getTemplateParameters()) {
-                    if (auto templateType = dynamic_cast<ast::ASTNodeTypeDecl*>(templateParameter.get()); templateType != nullptr)
-                        if (templateType->getName() == baseTypeName)
-                            foundType = create<ast::ASTNodeTypeDecl>("", templateParameter, endian, reference);
-                }
-
-            if (foundType == nullptr)
-                for (const auto &typeName : getNamespacePrefixedNames(baseTypeName)) {
-                    if (this->m_types.contains(typeName))
-                        foundType = create<ast::ASTNodeTypeDecl>("", this->m_types[typeName], endian, reference);
-                }
-
-            if (foundType == nullptr)
-                err::P0003.throwError(fmt::format("Type {} has not been declared yet.", baseTypeName), fmt::format("If this type is being declared further down in the code, consider forward declaring it with 'using {};'.", baseTypeName), 1);
-
-            if (auto actualType = dynamic_cast<ast::ASTNodeTypeDecl*>(foundType->getType().get()); actualType != nullptr)
-                if (const auto &templateTypes = actualType->getTemplateParameters(); !templateTypes.empty()) {
-                    if (!MATCHES(sequence(tkn::Operator::BoolLessThan)))
-                        err::P0002.throwError("Cannot use template type without template parameters.", {}, 1);
-
-                    u32 index = 0;
-                    do {
-                        if (index >= templateTypes.size())
-                            err::P0002.throwError(fmt::format("Provided more template parameters than expected. Type only has {} parameters", templateTypes.size()), {}, 1);
-
-                        auto parameter = templateTypes[index];
-                        if (auto type = dynamic_cast<ast::ASTNodeTypeDecl*>(parameter.get()); type != nullptr) {
-                            auto newType = parseType();
-                            if (newType->isForwardDeclared())
-                                err::P0002.throwError("Cannot use forward declared type as template parameter.", {}, 1);
-
-                            type->setType(std::move(newType), true);
-                            type->setName("");
-                        } else if (auto value = dynamic_cast<ast::ASTNodeLValueAssignment*>(parameter.get()); value != nullptr) {
-                            value->setRValue(parseMathematicalExpression(true));
-                        } else
-                            err::P0002.throwError("Invalid template parameter type.", {}, 1);
-
-                        index++;
-                    } while (MATCHES(sequence(tkn::Separator::Comma)));
-
-                    if (!MATCHES(sequence(tkn::Operator::BoolGreaterThan)))
-                        err::P0002.throwError(fmt::format("Expected '>' to close template list, got {}.", getFormattedToken(0)), {}, 1);
-
-                    return std::unique_ptr<ast::ASTNodeTypeDecl>(static_cast<ast::ASTNodeTypeDecl*>(foundType->clone().release()));
-                }
-
-            return foundType;
+            result = parseCustomType();
         } else if (MATCHES(sequence(tkn::ValueType::Any))) {    // Builtin type
             auto type = getValue<Token::ValueType>(-1);
-
-            return create<ast::ASTNodeTypeDecl>("", create<ast::ASTNodeBuiltinType>(type), endian, reference);
+            result = create<ast::ASTNodeTypeDecl>("", create<ast::ASTNodeBuiltinType>(type));
         } else {
             err::P0002.throwError(fmt::format("Invalid type. Expected built-in type or custom type name, got {}.", getFormattedToken(0)), {}, 1);
         }
+
+        result->setReference(reference);
+        if (endian.has_value())
+            result->setEndian(endian.value());
+        return result;
     }
 
     // <(parseType), ...>
@@ -1108,25 +1126,10 @@ namespace pl::core {
             return create<ast::ASTNodeArrayVariableDecl>(name, type, std::move(size), nullptr, nullptr, constant);
     }
 
-    std::unique_ptr<ast::ASTNodeTypeDecl> Parser::parsePointerSizeType() {
-        auto sizeType = parseType();
-
-        auto builtinType = dynamic_cast<ast::ASTNodeBuiltinType *>(sizeType->getType().get());
-
-        if (builtinType == nullptr || !Token::isInteger(builtinType->getType()))
-            err::P0009.throwError("Pointer size needs to be a built-in type.", {}, 1);
-
-        if (Token::getTypeSize(builtinType->getType()) > 8) {
-            err::P0009.throwError("Pointer size cannot be larger than 8 bytes.", {}, 1);
-        }
-
-        return sizeType;
-    }
-
     // (parseType) *Identifier : (parseType)
     std::unique_ptr<ast::ASTNode> Parser::parseMemberPointerVariable(const std::shared_ptr<ast::ASTNodeTypeDecl> &type) {
         auto name = getValue<Token::Identifier>(-2).get();
-        auto sizeType = parsePointerSizeType();
+        auto sizeType = parseType();
 
         if (MATCHES(sequence(tkn::Operator::At)))
             return create<ast::ASTNodePointerVariableDecl>(name, type, std::move(sizeType), parseMathematicalExpression());
@@ -1153,7 +1156,7 @@ namespace pl::core {
             err::P0002.throwError(fmt::format("Expected ':' after pointer definition, got {}.", getFormattedToken(0)), "A pointer requires a integral type to specify its own size.", 1);
         }
 
-        auto sizeType = parsePointerSizeType();
+        auto sizeType = parseType();
         auto arrayType = createShared<ast::ASTNodeArrayVariableDecl>("", type, std::move(size));
 
         if (MATCHES(sequence(tkn::Operator::At)))
@@ -1210,9 +1213,9 @@ namespace pl::core {
         } else if (MATCHES(sequence(tkn::ValueType::Padding, tkn::Separator::LeftBracket)))
             member = parsePadding();
         else if (MATCHES(sequence(tkn::Keyword::If)))
-            return parseConditional();
-        else if (MATCHES(sequence(tkn::Keyword::Match))) 
-            return parseMatchStatement();
+            return parseConditional([this]() { return parseMember(); });
+        else if (MATCHES(sequence(tkn::Keyword::Match)))
+            return parseMatchStatement([this]() { return parseMember(); });
         else if (MATCHES(oneOf(tkn::Keyword::Return, tkn::Keyword::Break, tkn::Keyword::Continue)))
             member = parseFunctionControlFlowStatement();
         else
@@ -1240,25 +1243,22 @@ namespace pl::core {
 
         typeDecl->setTemplateParameters(this->parseTemplateList());
 
-        if (MATCHES(sequence(tkn::Operator::Colon, tkn::Literal::Identifier))) {
+        this->m_currTemplateType.push_back(typeDecl);
+
+        if (MATCHES(sequence(tkn::Operator::Colon))) {
             // Inheritance
-
             do {
-                auto inheritedTypeName = getValue<Token::Identifier>(-1).get();
-                if (!this->m_types.contains(inheritedTypeName))
-                    err::P0003.throwError(fmt::format("Cannot inherit from unknown type {}.", typeName), fmt::format("If this type is being declared further down in the code, consider forward declaring it with 'using {};'.", typeName), 1);
-
-                structNode->addInheritance(this->m_types[inheritedTypeName]->clone());
-            } while (MATCHES(sequence(tkn::Separator::Comma, tkn::Literal::Identifier)));
-
-        } else if (MATCHES(sequence(tkn::Operator::Colon, tkn::ValueType::Any))) {
-            err::P0003.throwError("Cannot inherit from built-in type.", {}, 1);
+                if (MATCHES(sequence(tkn::ValueType::Any)))
+                    err::P0002.throwError("Cannot inherit from built-in type.", {}, 1);
+                if (!MATCHES(sequence(tkn::Literal::Identifier)))
+                    err::P0002.throwError(fmt::format("Expected type to inherit from, got {}.", getFormattedToken(0)), {}, 0);
+                structNode->addInheritance(parseCustomType());
+            } while (MATCHES(sequence(tkn::Separator::Comma)));
         }
 
         if (!MATCHES(sequence(tkn::Separator::LeftBrace)))
             err::P0002.throwError(fmt::format("Expected '{{' after struct declaration, got {}.", getFormattedToken(0)), {}, 1);
 
-        this->m_currTemplateType.push_back(typeDecl);
         while (!MATCHES(sequence(tkn::Separator::RightBrace))) {
             structNode->addMember(parseMember());
         }
@@ -1346,57 +1346,102 @@ namespace pl::core {
     }
 
 
+    // [Identifier : (parseMathematicalExpression);|Identifier identifier;|(parseFunctionControlFlowStatement)|(parseIfStatement)|(parseMatchStatement)]
     std::unique_ptr<ast::ASTNode> Parser::parseBitfieldEntry() {
-        std::unique_ptr<ast::ASTNode> result;
+        std::unique_ptr<ast::ASTNode> member = nullptr;
 
-        if (MATCHES(sequence(tkn::Literal::Identifier, tkn::Operator::Colon))) {
-            auto name = getValue<Token::Identifier>(-2).get();
-            result = create<ast::ASTNodeBitfieldField>(name, parseMathematicalExpression());
+        if (MATCHES(sequence(tkn::Literal::Identifier, tkn::Operator::Assign))) {
+            auto variableName = getValue<Token::Identifier>(-2).get();
+            member = parseFunctionVariableAssignment(variableName);
+        } else if (MATCHES(sequence(tkn::Literal::Identifier) && oneOf(tkn::Operator::Plus, tkn::Operator::Minus, tkn::Operator::Star, tkn::Operator::Slash, tkn::Operator::Percent, tkn::Operator::LeftShift, tkn::Operator::RightShift, tkn::Operator::BitOr, tkn::Operator::BitAnd, tkn::Operator::BitXor) && sequence(tkn::Operator::Assign)))
+            member = parseFunctionVariableCompoundAssignment(getValue<Token::Identifier>(-3).get());
+        else if (MATCHES(sequence(tkn::Literal::Identifier, tkn::Operator::Colon))) {
+            auto fieldName = getValue<Token::Identifier>(-2).get();
+            member = create<ast::ASTNodeBitfieldField>(fieldName, parseMathematicalExpression());
+        } else if (MATCHES(sequence(tkn::ValueType::Padding, tkn::Operator::Colon)))
+            member = create<ast::ASTNodeBitfieldField>("$padding$", parseMathematicalExpression());
+        else if (peek(tkn::Literal::Identifier) || peek(tkn::ValueType::Any)) {
+            std::unique_ptr<ast::ASTNodeTypeDecl> type = nullptr;
 
-            if (MATCHES(sequence(tkn::Separator::LeftBracket, tkn::Separator::LeftBracket)))
-                parseAttribute(dynamic_cast<ast::Attributable *>(result.get()));
-        } else if (MATCHES(sequence(tkn::ValueType::Padding, tkn::Operator::Colon))) {
-            result = create<ast::ASTNodeBitfieldField>("$padding$", parseMathematicalExpression());
-        } else if (MATCHES(sequence(tkn::Keyword::If))) {
-            if (!MATCHES(sequence(tkn::Separator::LeftParenthesis)))
-                err::P0002.throwError(fmt::format("Expected '(' after 'if', got {}.", getFormattedToken(0)), {}, 1);
+            if (MATCHES(sequence(tkn::ValueType::Any))) {
+                type = create<ast::ASTNodeTypeDecl>("", create<ast::ASTNodeBuiltinType>(getValue<Token::ValueType>(-1)));
+            } else if (MATCHES(sequence(tkn::Literal::Identifier))) {
+                auto originalPosition = m_curr;
+                auto name = parseNamespaceResolution();
 
-            auto condition = parseMathematicalExpression();
-            std::vector<std::unique_ptr<ast::ASTNode>> trueBody, falseBody;
+                if (MATCHES(sequence(tkn::Separator::LeftParenthesis))) {
+                    m_curr = originalPosition;
+                    member = parseFunctionCall();
+                } else {
+                    type = getCustomType(name);
 
-            if (MATCHES(sequence(tkn::Separator::RightParenthesis, tkn::Separator::LeftBrace))) {
-                while (!MATCHES(sequence(tkn::Separator::RightBrace))) {
-                    trueBody.push_back(parseBitfieldEntry());
+                    if (type == nullptr)
+                        err::P0002.throwError(fmt::format("Expected a variable name followed by ':', a function call or a bitfield type name, got {}.", getFormattedToken(1)), {}, 1);
+                    parseCustomTypeParameters(type);
+
+                    ast::ASTNodeTypeDecl *topmostTypeDecl = type.get();
+                    while (auto *parentTypeDecl = dynamic_cast<ast::ASTNodeTypeDecl*>(topmostTypeDecl->getType().get()))
+                        topmostTypeDecl = parentTypeDecl;
+                    if (auto *nestedBitfield = dynamic_cast<ast::ASTNodeBitfield*>(topmostTypeDecl->getType().get()); nestedBitfield != nullptr)
+                        nestedBitfield->setNested();
+                    else
+                        err::P0003.throwError("Only bitfields can be nested within other bitfields.", {}, 1);
                 }
-            } else if (MATCHES(sequence(tkn::Separator::RightParenthesis))) {
-                trueBody.push_back(parseBitfieldEntry());
-            } else
-                err::P0002.throwError(fmt::format("Expected ')' after if head, got {}.", getFormattedToken(0)), {}, 1);
-
-            if (MATCHES(sequence(tkn::Keyword::Else, tkn::Separator::LeftBrace))) {
-                while (!MATCHES(sequence(tkn::Separator::RightBrace))) {
-                    falseBody.push_back(parseBitfieldEntry());
-                }
-            } else if (MATCHES(sequence(tkn::Keyword::Else))) {
-                falseBody.push_back(parseBitfieldEntry());
             }
 
-            return create<ast::ASTNodeConditionalStatement>(std::move(condition), std::move(trueBody), std::move(falseBody));
-        }
+            if (type == nullptr) {
+                // We called a function, do no more parsing.
+            } else if (MATCHES(sequence(tkn::Literal::Identifier, tkn::Separator::LeftBracket) && sequence<Not>(tkn::Separator::LeftBracket))){
+                // (parseType) Identifier[[(parseMathematicalExpression)|(parseWhileStatement)]];
+                auto fieldName = getValue<Token::Identifier>(-2).get();
+
+                std::unique_ptr<ast::ASTNode> size;
+                if (MATCHES(sequence(tkn::Keyword::While, tkn::Separator::LeftParenthesis)))
+                    size = parseWhileStatement();
+                else
+                    size = parseMathematicalExpression();
+
+                if (!MATCHES(sequence(tkn::Separator::RightBracket)))
+                    err::P0002.throwError(fmt::format("Expected ']' at end of array declaration, got {}.", getFormattedToken(0)), {}, 1);
+
+                member = create<ast::ASTNodeBitfieldArrayVariableDecl>(fieldName, move(type), move(size));
+            } else if (MATCHES(sequence(tkn::Literal::Identifier))) {
+                // (parseType) Identifier;
+                if (MATCHES(sequence(tkn::Operator::At)))
+                    err::P0002.throwError(fmt::format("Placement syntax is invalid within bitfields."), {}, 0);
+
+                auto variableName = getValue<Token::Identifier>(-1).get();
+                member = parseMemberVariable(std::move(type), false, false, variableName);
+            } else
+                err::P0002.throwError(fmt::format("Expected a variable name, got {}.", getFormattedToken(0)), {}, 0);
+        } else if (MATCHES(sequence(tkn::Keyword::If)))
+            return parseConditional([this]() { return parseBitfieldEntry(); });
+        else if (MATCHES(sequence(tkn::Keyword::Match)))
+            return parseMatchStatement([this]() { return parseBitfieldEntry(); });
+        else if (MATCHES(oneOf(tkn::Keyword::Return, tkn::Keyword::Break, tkn::Keyword::Continue)))
+            member = parseFunctionControlFlowStatement();
         else
             err::P0002.throwError("Invalid bitfield member definition.", {}, 0);
+
+        if (MATCHES(sequence(tkn::Separator::LeftBracket, tkn::Separator::LeftBracket)))
+            parseAttribute(dynamic_cast<ast::Attributable *>(member.get()));
 
         if (!MATCHES(sequence(tkn::Separator::Semicolon)))
             err::P0002.throwError(fmt::format("Expected ';' at end of statement, got {}.", getFormattedToken(0)), {}, 1);
 
-        return result;
+        // Consume superfluous semicolons
+        while (MATCHES(sequence(tkn::Separator::Semicolon)))
+            ;
+
+        return member;
     }
 
-    // bitfield Identifier { <Identifier : (parseMathematicalExpression)[;]...> }
+    // bitfield Identifier { ... }
     std::shared_ptr<ast::ASTNodeTypeDecl> Parser::parseBitfield() {
         std::string typeName = getValue<Token::Identifier>(-1).get();
 
-        auto typeDecl     = addType(typeName, create<ast::ASTNodeBitfield>());
+        auto typeDecl = addType(typeName, create<ast::ASTNodeBitfield>());
+        typeDecl->setTemplateParameters(this->parseTemplateList());
         auto bitfieldNode = static_cast<ast::ASTNodeBitfield *>(typeDecl->getType().get());
 
         if (!MATCHES(sequence(tkn::Separator::LeftBrace)))
@@ -1497,7 +1542,7 @@ namespace pl::core {
     std::unique_ptr<ast::ASTNode> Parser::parsePointerVariablePlacement(const std::shared_ptr<ast::ASTNodeTypeDecl> &type) {
         auto name = getValue<Token::Identifier>(-2).get();
 
-        auto sizeType = parsePointerSizeType();
+        auto sizeType = parseType();
 
         if (!MATCHES(sequence(tkn::Operator::At)))
             err::P0002.throwError(fmt::format("Expected '@' after pointer placement, got {}.", getFormattedToken(0)), {}, 1);
@@ -1531,7 +1576,7 @@ namespace pl::core {
             err::P0002.throwError(fmt::format("Expected ':' at end of pointer declaration, got {}.", getFormattedToken(0)), {}, 1);
         }
 
-        auto sizeType = parsePointerSizeType();
+        auto sizeType = parseType();
 
         if (!MATCHES(sequence(tkn::Operator::At)))
             err::P0002.throwError(fmt::format("Expected '@' after array placement, got {}.", getFormattedToken(0)), {}, 1);
@@ -1597,10 +1642,8 @@ namespace pl::core {
         std::shared_ptr<ast::ASTNode> statement;
         bool requiresSemicolon = true;
 
-        if (auto docComment = getDocComment(); docComment.has_value()) {
-            if (docComment->global)
-                this->addGlobalDocComment(docComment->comment);
-        }
+        if (auto docComment = getDocComment(true); docComment.has_value())
+            this->addGlobalDocComment(docComment->comment);
 
         if (MATCHES(sequence(tkn::Keyword::Using, tkn::Literal::Identifier) && (peek(tkn::Operator::Assign) || peek(tkn::Operator::BoolLessThan))))
             statement = parseUsingDeclaration();
@@ -1651,11 +1694,10 @@ namespace pl::core {
         if (!statement)
             return { };
 
-        if (auto docComment = getDocComment(); docComment.has_value()) {
-            if (!docComment->global)
-                statement->setDocComment(docComment->comment);
+        if (auto docComment = getDocComment(false); docComment.has_value()) {
+            statement->setDocComment(docComment->comment);
         }
-        statement->setShouldDocument(!this->m_ignoreDocs);
+        statement->setShouldDocument(this->m_ignoreDocsCount == 0);
 
         return hlp::moveToVector(std::move(statement));
     }
@@ -1685,6 +1727,7 @@ namespace pl::core {
         this->m_types.clear();
         this->m_currTemplateType.clear();
         this->m_matchedOptionals.clear();
+        this->m_processedDocComments.clear();
 
         this->m_currNamespace.clear();
         this->m_currNamespace.emplace_back();

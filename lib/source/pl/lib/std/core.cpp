@@ -60,6 +60,16 @@ namespace pl::lib::libstd::core {
                 return std::nullopt;
             });
 
+            /* set_display_name(pattern, name) */
+            runtime.addFunction(nsStdCore, "set_display_name", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+                auto pattern = params[0].toPattern();
+                auto name = params[1].toString(false);
+
+                pattern->setDisplayName(name);
+
+                return std::nullopt;
+            });
+
             /* set_pattern_comment(pattern, comment) */
             runtime.addFunction(nsStdCore, "set_pattern_comment", FunctionParameterCount::exactly(2), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
                 auto pattern = params[0].toPattern();
@@ -102,6 +112,9 @@ namespace pl::lib::libstd::core {
                     case 1:
                         ctx->setBitfieldOrder(pl::core::BitfieldOrder::RightToLeft);
                         break;
+                    case 2:
+                        ctx->setBitfieldOrder({});
+                        break;
                     default:
                         err::E0012.throwError("Invalid endian value.", "Try one of the values in the std::core::BitfieldOrder enum.");
                 }
@@ -111,14 +124,16 @@ namespace pl::lib::libstd::core {
 
             /* get_bitfield_order() -> order */
             runtime.addFunction(nsStdCore, "get_bitfield_order", FunctionParameterCount::none(), [](Evaluator *ctx, auto) -> std::optional<Token::Literal> {
-                switch (ctx->getBitfieldOrder()) {
-                    case pl::core::BitfieldOrder::LeftToRight:
-                        return 0;
-                    case pl::core::BitfieldOrder::RightToLeft:
-                        return 1;
+                if (ctx->getBitfieldOrder().has_value()) {
+                    switch (ctx->getBitfieldOrder().value()) {
+                        case pl::core::BitfieldOrder::LeftToRight:
+                            return 0;
+                        case pl::core::BitfieldOrder::RightToLeft:
+                            return 1;
+                    }
                 }
 
-                return std::nullopt;
+                return 2;
             });
 
             /* array_index() -> index */

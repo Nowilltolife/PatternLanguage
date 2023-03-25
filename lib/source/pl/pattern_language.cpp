@@ -9,8 +9,8 @@
 
 #include <pl/lib/std/libstd.hpp>
 
-#include <pl/helpers/fs.hpp>
-#include <pl/helpers/file.hpp>
+#include <wolv/io/fs.hpp>
+#include <wolv/io/file.hpp>
 
 namespace pl {
 
@@ -69,7 +69,7 @@ namespace pl {
             return std::nullopt;
         }
 
-        if (!this->m_internals.validator->validate(code, *ast, true)) {
+        if (!this->m_internals.validator->validate(code, *ast, true, true)) {
             this->m_currError = this->m_internals.validator->getError();
 
             return std::nullopt;
@@ -80,21 +80,21 @@ namespace pl {
 
     bool PatternLanguage::executeString(std::string code, const std::map<std::string, core::Token::Literal> &envVars, const std::map<std::string, core::Token::Literal> &inVariables, bool checkResult) {
         auto startTime = std::chrono::high_resolution_clock::now();
-        PL_ON_SCOPE_EXIT {
+        ON_SCOPE_EXIT {
             auto endTime = std::chrono::high_resolution_clock::now();
             this->m_runningTime = std::chrono::duration_cast<std::chrono::duration<double>>(endTime - startTime);
         };
 
-        code = hlp::replaceAll(code, "\r\n", "\n");
-        code = hlp::replaceAll(code, "\t", "    ");
+        code = wolv::util::replaceStrings(code, "\r\n", "\n");
+        code = wolv::util::replaceStrings(code, "\t", "    ");
 
         auto &evaluator = this->m_internals.evaluator;
 
         this->m_running = true;
         this->m_aborted = false;
-        PL_ON_SCOPE_EXIT { this->m_running = false; };
+        ON_SCOPE_EXIT { this->m_running = false; };
 
-        PL_ON_SCOPE_EXIT {
+        ON_SCOPE_EXIT {
             if (this->m_currError.has_value()) {
                 const auto &error = this->m_currError.value();
 
@@ -152,7 +152,7 @@ namespace pl {
     }
 
     bool PatternLanguage::executeFile(const std::fs::path &path, const std::map<std::string, core::Token::Literal> &envVars, const std::map<std::string, core::Token::Literal> &inVariables, bool checkResult) {
-        hlp::fs::File file(path, hlp::fs::File::Mode::Read);
+        wolv::io::File file(path, wolv::io::File::Mode::Read);
         if (!file.isValid())
             return false;
 
@@ -275,7 +275,7 @@ namespace pl {
 
         this->m_internals.evaluator->getConsole().clear();
         this->m_internals.evaluator->setDefaultEndian(this->m_defaultEndian);
-        this->m_internals.evaluator->setBitfieldOrder(core::BitfieldOrder::RightToLeft);
+        this->m_internals.evaluator->setBitfieldOrder({});
         this->m_internals.evaluator->setEvaluationDepth(32);
         this->m_internals.evaluator->setArrayLimit(0x10000);
         this->m_internals.evaluator->setPatternLimit(0x20000);

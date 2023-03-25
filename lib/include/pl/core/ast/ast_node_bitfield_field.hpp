@@ -35,15 +35,21 @@ namespace pl::core::ast {
             if (literal == nullptr)
                 err::E0010.throwError("Cannot use void expression as bitfield field size.", {}, this);
 
-            u8 bitSize = std::visit(hlp::overloaded {
+            u8 bitSize = std::visit(wolv::util::overloaded {
                     [this](const std::string &) -> u8 { err::E0005.throwError("Cannot use string as bitfield field size.", "Try using a integral value instead.", this); },
                     [this](ptrn::Pattern *) -> u8 { err::E0005.throwError("Cannot use string as bitfield field size.", "Try using a integral value instead.", this); },
                     [](auto &&offset) -> u8 { return static_cast<u8>(offset); }
             }, literal->getValue());
 
-            auto pattern = std::make_shared<ptrn::PatternBitfieldField>(evaluator, evaluator->dataOffset(), 0, bitSize);
+            auto pattern = std::make_shared<ptrn::PatternBitfieldField>(evaluator, evaluator->dataOffset(), evaluator->getBitfieldBitOffset(), bitSize);
             pattern->setPadding(this->isPadding());
             pattern->setVariableName(this->getName());
+
+            pattern->setEndian(evaluator->getDefaultEndian());
+            evaluator->addToBitfieldBitOffset(bitSize);
+            pattern->setSection(evaluator->getSectionId());
+
+            applyVariableAttributes(evaluator, this, pattern);
 
             return hlp::moveToVector<std::shared_ptr<ptrn::Pattern>>({ std::move(pattern) });
         }

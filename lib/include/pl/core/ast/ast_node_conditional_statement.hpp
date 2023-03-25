@@ -57,7 +57,7 @@ namespace pl::core::ast {
 
             evaluator->pushScope(nullptr, variables);
             evaluator->getScope(0).parameterPack = parameterPack;
-            PL_ON_SCOPE_EXIT {
+            ON_SCOPE_EXIT {
                 evaluator->popScope();
             };
 
@@ -68,7 +68,7 @@ namespace pl::core::ast {
                     if (!result.has_value())
                         return std::nullopt;
 
-                    return std::visit(hlp::overloaded {
+                    return std::visit(wolv::util::overloaded {
                         [](const auto &value) -> FunctionResult {
                             return value;
                         },
@@ -91,6 +91,13 @@ namespace pl::core::ast {
             return std::nullopt;
         }
 
+        [[nodiscard]] const std::vector<std::unique_ptr<ASTNode>> &getTrueBody() const {
+            return this->m_trueBody;
+        }
+        [[nodiscard]] const std::vector<std::unique_ptr<ASTNode>> &getFalseBody() const {
+            return this->m_falseBody;
+        }
+
     private:
         [[nodiscard]] bool evaluateCondition(const std::unique_ptr<ASTNode> &condition, Evaluator *evaluator) const {
             const auto node    = condition->evaluate(evaluator);
@@ -98,7 +105,7 @@ namespace pl::core::ast {
             if (literal == nullptr)
                 err::E0010.throwError("Cannot use void expression as condition.", {}, this);
 
-            return std::visit(hlp::overloaded {
+            return std::visit(wolv::util::overloaded {
                 [](const std::string &value) -> bool { return !value.empty(); },
                 [this](ptrn::Pattern *const &pattern) -> bool { err::E0004.throwError(fmt::format("Cannot cast value of type '{}' to type 'bool'.", pattern->getTypeName()), {}, this); },
                 [](auto &&value) -> bool { return value != 0; }

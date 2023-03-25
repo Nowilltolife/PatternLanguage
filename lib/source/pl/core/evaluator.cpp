@@ -38,7 +38,7 @@ namespace pl::core {
         };
     }
 
-    void Evaluator::createArrayVariable(const std::string &name, ast::ASTNode *type, size_t entryCount, bool constant) {
+    void Evaluator::createArrayVariable(const std::string &name, ast::ASTNode *type, size_t entryCount, u64 section, bool constant) {
         // A variable named _ gets treated as "don't care"
         if (name == "_")
             return;
@@ -58,20 +58,31 @@ namespace pl::core {
 
         auto pattern = new ptrn::PatternArrayDynamic(this, 0, typePattern->getSize() * entryCount);
 
-        typePattern->setLocal(true);
-        std::vector<std::shared_ptr<ptrn::Pattern>> entries;
-        for (size_t i = 0; i < entryCount; i++) {
-            auto entryPattern = typePattern->clone();
+        if (section == ptrn::Pattern::HeapSectionId) {
+            typePattern->setLocal(true);
+            std::vector<std::shared_ptr<ptrn::Pattern>> entries;
+            for (size_t i = 0; i < entryCount; i++) {
+                auto entryPattern = typePattern->clone();
 
-            auto &heap = this->getHeap();
-            entryPattern->setOffset(u64(heap.size()) << 32);
-            heap.emplace_back();
+                auto &heap = this->getHeap();
+                entryPattern->setOffset(u64(heap.size()) << 32);
+                heap.emplace_back();
 
-            entries.push_back(std::move(entryPattern));
+                entries.push_back(std::move(entryPattern));
+            }
+            pattern->setEntries(std::move(entries));
+            pattern->setLocal(true);
+        } else {
+            typePattern->setSection(section);
+            std::vector<std::shared_ptr<ptrn::Pattern>> entries;
+            for (size_t i = 0; i < entryCount; i++) {
+                auto entryPattern = typePattern->clone();
+                entryPattern->setOffset(entryPattern->getSize() * i);
+                entries.push_back(std::move(entryPattern));
+            }
+            pattern->setEntries(std::move(entries));
+            pattern->setSection(section);
         }
-
-        pattern->setEntries(std::move(entries));
-        pattern->setLocal(true);
 
         pattern->setVariableName(name);
 
@@ -82,24 +93,22 @@ namespace pl::core {
         variables.push_back(std::unique_ptr<ptrn::Pattern>(pattern));
     }
 
-    void Evaluator::createVariable(const std::string &name, ast::ASTNode *type, const std::optional<Token::Literal> &value, bool outVariable, bool reference, bool templateVariable, bool constant) {
+    std::shared_ptr<ptrn::Pattern> Evaluator::createVariable(const std::string &name, ast::ASTNode *type, const std::optional<Token::Literal> &value, bool outVariable, bool reference, bool templateVariable, bool constant) {
         // A variable named _ gets treated as "don't care"
         if (name == "_")
-            return;
+            return nullptr;
 
-        {
+        if (templateVariable) {
+            std::erase_if(this->m_templateParameters.back(), [&](const auto &var) {
+                return var->getVariableName() == name;
+            });
+        } else {
             auto &currScope = this->getScope(0);
             for (auto &variable : *currScope.scope) {
                 if (variable->getVariableName() == name) {
                     err::E0003.throwError(fmt::format("Variable with name '{}' already exists in this scope.", name), {}, type);
                 }
             }
-        }
-
-        if (templateVariable) {
-            std::erase_if(this->m_templateParameters.back(), [&](const auto &var) {
-                return var->getVariableName() == name;
-            });
         }
 
         auto sectionId = this->getSectionId();
@@ -111,8 +120,10 @@ namespace pl::core {
             if (sectionId == ptrn::Pattern::PatternLocalSectionId) {
                 patternLocalAddress = this->m_patternLocalStorage.empty() ? 0 : this->m_patternLocalStorage.rbegin()->first + 1;
                 this->m_patternLocalStorage.insert({ patternLocalAddress, { } });
-            } else {
+            } else if (sectionId == ptrn::Pattern::HeapSectionId) {
                 this->getHeap().emplace_back();
+            } else {
+                err::E0001.throwError(fmt::format("Attempted to place a variable into section 0x{:X}.", sectionId), {}, type);
             }
         }
 
@@ -178,9 +189,10 @@ namespace pl::core {
             this->getConsole().log(LogConsole::Level::Debug, fmt::format("Creating local variable '{} {}' at heap address 0x{:X}.", pattern->getTypeName(), pattern->getVariableName(), pattern->getOffset()));
 
         if (templateVariable)
-            this->m_templateParameters.back().push_back(std::move(pattern));
+            this->m_templateParameters.back().push_back(pattern);
         else
-            this->getScope(0).scope->push_back(std::move(pattern));
+            this->getScope(0).scope->push_back(pattern);
+        return pattern;
     }
 
     template<typename T>
@@ -195,7 +207,7 @@ namespace pl::core {
     }
 
     static Token::Literal castLiteral(const ptrn::Pattern *pattern, const Token::Literal &literal) {
-        return std::visit(hlp::overloaded {
+        return std::visit(wolv::util::overloaded {
             [&](auto &value) -> Token::Literal {
                if (dynamic_cast<const ptrn::PatternUnsigned*>(pattern) || dynamic_cast<const ptrn::PatternEnum*>(pattern))
                    return truncateValue<u128>(pattern->getSize(), u128(value));
@@ -284,7 +296,7 @@ namespace pl::core {
                 err::E0011.throwError(fmt::format("Cannot modify global variable '{}' as it has been placed in memory.", name));
 
             // If the variable is being set to a pattern, adjust its layout to the real layout as it potentially contains dynamically sized members
-            std::visit(hlp::overloaded {
+            std::visit(wolv::util::overloaded {
                 [&](ptrn::Pattern * const value) {
                     variablePattern = value->clone();
 
@@ -355,7 +367,7 @@ namespace pl::core {
                     this->getConsole().log(LogConsole::Level::Debug, fmt::format("Setting local variable '{}' to {}.", pattern->getVariableName(), value));
             };
 
-            std::visit(hlp::overloaded {
+            std::visit(wolv::util::overloaded {
                     [&](const auto &value) {
                         auto adjustedValue = hlp::changeEndianess(value, pattern->getSize(), pattern->getEndian());
                         copyToStorage(adjustedValue);
@@ -595,7 +607,7 @@ namespace pl::core {
         if (this->m_allowDangerousFunctions == DangerousFunctionPermission::Deny)
             this->m_allowDangerousFunctions = DangerousFunctionPermission::Ask;
 
-        PL_ON_SCOPE_EXIT {
+        ON_SCOPE_EXIT {
             this->m_envVariables.clear();
             this->m_evaluated = true;
         };
@@ -638,7 +650,7 @@ namespace pl::core {
                         for (auto &pattern : varDeclNode->createPatterns(this)) {
                             if (localVariable) {
                                 auto name = pattern->getVariableName();
-                                hlp::unused(varDeclNode->execute(this));
+                                wolv::util::unused(varDeclNode->execute(this));
 
                                 if (varDeclNode->isInVariable() && this->m_inVariables.contains(name))
                                     this->setVariable(name, this->m_inVariables[name]);
@@ -662,7 +674,7 @@ namespace pl::core {
 
                         for (auto &pattern : arrayVarDeclNode->createPatterns(this)) {
                             if (localVariable) {
-                                hlp::unused(arrayVarDeclNode->execute(this));
+                                wolv::util::unused(arrayVarDeclNode->execute(this));
 
                                 this->dataOffset() = startOffset;
                             } else {
@@ -682,7 +694,7 @@ namespace pl::core {
                         }
                     } else {
                         this->pushSectionId(ptrn::Pattern::HeapSectionId);
-                        hlp::unused(node->execute(this));
+                        wolv::util::unused(node->execute(this));
                         this->popSectionId();
                     }
 
@@ -756,7 +768,7 @@ namespace pl::core {
     }
 
     void Evaluator::patternCreated(ptrn::Pattern *pattern) {
-        hlp::unused(pattern);
+        wolv::util::unused(pattern);
 
         if (this->m_currPatternCount > this->m_patternLimit && !this->m_evaluated)
             err::E0007.throwError(fmt::format("Pattern count exceeded set limit of '{}'.", this->getPatternLimit()), "If this is intended, try increasing the limit using '#pragma pattern_limit <new_limit>'.");

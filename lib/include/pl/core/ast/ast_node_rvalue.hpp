@@ -123,9 +123,7 @@ namespace pl::core::ast {
                 readVariable(evaluator, value, pattern);
                 literal = value;
             } else if (auto bitfieldFieldPattern = dynamic_cast<ptrn::PatternBitfieldField *>(pattern); bitfieldFieldPattern != nullptr) {
-                u64 value = 0;
-                readVariable(evaluator, value, pattern);
-                literal = u128(hlp::extract(bitfieldFieldPattern->getBitOffset() + (bitfieldFieldPattern->getBitSize() - 1), bitfieldFieldPattern->getBitOffset(), value));
+                literal = u128(bitfieldFieldPattern->readValue());
             } else {
                 literal = pattern;
             }
@@ -224,7 +222,7 @@ namespace pl::core::ast {
                     if (index == nullptr)
                         err::E0010.throwError("Cannot use void expression as array index.", {}, this);
 
-                    std::visit(hlp::overloaded {
+                    std::visit(wolv::util::overloaded {
                             [this](const std::string &) { err::E0006.throwError("Cannot use string to index array.", "Try using an integral type instead.", this); },
                             [this](ptrn::Pattern *pattern) { err::E0006.throwError(fmt::format("Cannot use custom type '{}' to index array.", pattern->getTypeName()), "Try using an integral type instead.", this); },
                             [&, this](auto &&index) {
