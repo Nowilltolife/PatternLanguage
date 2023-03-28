@@ -63,6 +63,24 @@ namespace pl::core::ast {
             return this->m_constant;
         }
 
+        void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
+            this->m_size->emit(bytecode, emitter);
+            auto &type = getType()->getType();
+            //auto &placementOffset = var->getPlacementOffset();
+            const std::string& name = getName();
+            auto [typeInfo, typeName] = emitter.getTypeInfo(type);
+            if(!emitter.flags.ctor) {
+                emitter.read_array(typeInfo);
+                emitter.local(name, typeName);
+                emitter.dup();
+                emitter.store_local(name, typeName);
+                emitter.export_(name);
+            } else {
+                emitter.read_array(typeInfo);
+                emitter.store_field(name, typeName, true);
+            }
+        }
+
     private:
         std::string m_name;
         std::shared_ptr<ASTNodeTypeDecl> m_type;
