@@ -9,6 +9,7 @@
 #include <pl/patterns/pattern_struct.hpp>
 #include <pl/patterns/pattern_boolean.hpp>
 #include <pl/patterns/pattern_float.hpp>
+#include <pl/patterns/pattern_array_static.hpp>
 #include <pl/helpers/utils.hpp>
 
 #if defined(__clang__)
@@ -36,7 +37,7 @@
 
 #define COMPARE_CASE(op, operation) \
     case op: { \
-        stack.push(compare(stack.pop(), stack.pop(), operation)); \
+        stack.push(compareValues(stack.pop(), stack.pop(), operation)); \
         break; \
     }
 
@@ -45,8 +46,11 @@ using namespace pl::core;
 using namespace pl::core;
 using namespace pl::core::instr;
 using namespace pl::ptrn;
-using pl::core::instr::Opcode;
+using pl::core::instr::TypeInfo;
+using pl::core::instr::Opcode, pl::core::instr::Operand, pl::core::instr::SymbolId;
 using std::get_if;
+
+using TypeId = pl::core::instr::TypeInfo::TypeId;
 
 // helper type for the visitor #4
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
@@ -63,7 +67,8 @@ template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 u32 colorIndex = 0;
 
 u32 getNextPalletColor() {
-    constexpr static std::array Palette = { 0x70B4771F, 0x700E7FFF, 0x702CA02C, 0x702827D6, 0x70BD6794, 0x704B568C, 0x70C277E3, 0x7022BDBC, 0x70CFBE17 };
+    constexpr static std::array Palette = {0x70B4771F, 0x700E7FFF, 0x702CA02C, 0x702827D6, 0x70BD6794, 0x704B568C,
+                                           0x70C277E3, 0x7022BDBC, 0x70CFBE17};
 
     auto index = colorIndex;
     colorIndex = (colorIndex + 1) % Palette.size();
@@ -71,82 +76,113 @@ u32 getNextPalletColor() {
     return Palette[index];
 }
 
-Value newValue() {
-    return std::make_unique<Value_>();
-}
-
-Value VirtualMachine::readStaticValue(u16 type) {
-    auto valueType = (Token::ValueType) type;
+bool VirtualMachine::readValue(Operand type, TypeId id, bool next) {
+    if(m_frame->escapeNow) {
+        m_frame->escapeNow = false;
+        return true;
+    }
     auto value = newValue();
-    value->size = Token::getTypeSize(valueType);
-    value->address = this->m_address;
-    value->section = 0;
-    switch (valueType) {
-        default: {
-            if(Token::isUnsigned(valueType)) {
-                u128 v = 0;
-                this->readData(this->m_address, &v, value->size, 0);
-                value->v = v;
-            } else if(Token::isSigned(valueType)) {
-                i128 v = 0;
-                this->readData(this->m_address, &v, value->size, 0);
-                value->v = v;
-            } else if (Token::isFloatingPoint(valueType)) {
-                double v = 0;
-                this->readData(this->m_address, &v, value->size, 0);
-                value->v = v;
-            } else {
+#ifdef DEBUG
+    value->type = id;
+#endif
+    if(TypeInfo::isBuiltin(id)) {
+        value->size = TypeInfo::getTypeSize(id);
+        value->address = this->m_address;
+        value->section = 0;
+        if(TypeInfo::isUnsigned(id)) {
+            u128 v = 0;
+            readData(value->address, &v, value->size, 0);
+            value->setValue(v);
+        } else if(TypeInfo::isSigned(id)) {
+            i128 v = 0;
+            readData(value->address, &v, value->size, 0);
+            value->setValue(v);
+        } else if(id == TypeInfo::Float) {
+            float v = 0;
+            readData(value->address, &v, value->size, 0);
+            value->setValue(v);
+        }
+        this->m_address += value->size;
+        m_frame->stack.push(value);
+        return true;
+    } else if(TypeInfo::isComplex(id)) {
+        switch (id) {
+            case TypeInfo::Structure: {
+                Struct structure = {};
+                structure.typeName = type;
+                structure.fields = {};
+                structure.address = this->m_address;
+                value->setValue(structure);
+                value->address = this->m_address;
+                m_frame->stack.push(value);
+                auto constructor = lookupConstructor(type);
+                ASSERT(constructor.name != 0, "constructor not found");
+                if(next) {
+                    this->m_frame->escapeNow = true;
+                    this->m_frame->pc--;
+                }
+                enterFunction(constructor.name, true); // constructor MUST push new struct onto stack
+                // also tell the vm to return back one instruction after enter, to allow function be executed
+                return false;
+            }
+            default: {
                 err::E0001.throwError(fmt::format("#{:x} read_value failed: invalid type", m_frame->pc));
             }
         }
+    } else {
+        err::E0001.throwError(fmt::format("#{:x} read_value failed: invalid type", m_frame->pc));
     }
-    return value;
 }
 
-std::shared_ptr<Pattern> VirtualMachine::convert(const Value& value) {
+std::unique_ptr<Pattern> VirtualMachine::convert(const Value& value) {
     auto a = std::visit(overloaded {
         [&](bool b) {
             wolv::util::unused(b);
-            return (std::shared_ptr<Pattern>) std::make_shared<PatternBoolean>(nullptr, value->address);
+            return (std::unique_ptr<Pattern>) std::make_unique<PatternBoolean>(nullptr, value->address);
         },
         [&](double d) {
             wolv::util::unused(d);
-            return (std::shared_ptr<Pattern>) std::make_shared<PatternFloat>(nullptr, value->address, value->size);
+            return (std::unique_ptr<Pattern>) std::make_unique<PatternFloat>(nullptr, value->address, value->size);
         },
         [&](u128 v) {
             wolv::util::unused(v);
-            return (std::shared_ptr<Pattern>) std::make_shared<PatternUnsigned>(nullptr, value->address, value->size);
+            return (std::unique_ptr<Pattern>) std::make_unique<PatternUnsigned>(nullptr, value->address, value->size);
         },
         [&](i128 v) {
             wolv::util::unused(v);
-            return (std::shared_ptr<Pattern>) std::make_shared<PatternSigned>(nullptr, value->address, value->size);
+            return (std::unique_ptr<Pattern>) std::make_unique<PatternSigned>(nullptr, value->address, value->size);
         },
         [&](const Struct& strct) {
             std::vector<std::shared_ptr<Pattern>> members;
             u64 size = 0;
             for (const auto &[name, field]: strct.fields) {
-                auto fieldPattern = convert(field.value);
+                auto fieldPattern = std::shared_ptr<Pattern>(convert(field.value).release());
                 fieldPattern->setVariableName(lookupString(field.name));
                 fieldPattern->setTypeName(lookupString(field.typeName));
                 members.push_back(fieldPattern);
                 size += fieldPattern->getSize();
             }
-            auto pattern = std::make_shared<PatternStruct>(nullptr, value->address, size);
+            auto pattern = std::make_unique<PatternStruct>(nullptr, value->address, size);
             pattern->setTypeName(lookupString(strct.typeName));
             pattern->setVariableName(lookupString(strct.name));
             pattern->setMembers(members);
-            return (std::shared_ptr<Pattern>) pattern;
+            return (std::unique_ptr<Pattern>) std::move(pattern);
         },
         [&](Field* field) {
             auto fieldPattern = convert(field->value);
             fieldPattern->setVariableName(lookupString(field->name));
             fieldPattern->setTypeName(lookupString(field->typeName));
-            return (std::shared_ptr<Pattern>) fieldPattern;
+            return (std::unique_ptr<Pattern>) std::move(fieldPattern);
+        },
+        [&](const StaticArray& array) {
+            auto pattern = std::make_unique<PatternArrayStatic>(nullptr, value->address, array.size * array.templateValue->size);
+            pattern->setEntries(convert(array.templateValue), array.size);
+            return (std::unique_ptr<Pattern>) std::move(pattern);
         },
         [&](const Value& value) {
-            return (std::shared_ptr<Pattern>) convert(value);
+            return (std::unique_ptr<Pattern>) convert(value);
         }
-    }, value->v);
+    }, value->m_value);
     a->setColor(getNextPalletColor());
     a->setVm(this);
     return a;
@@ -165,17 +201,16 @@ void VirtualMachine::loadBytecode(Bytecode bytecode) {
     colorIndex = 0;
 }
 
-void VirtualMachine::enterFunction(u32 name) {
+void VirtualMachine::enterFunction(SymbolId name, bool ctor) {
     // retrieve from function table
     auto function = this->lookupFunction(name);
     ASSERT(function.name != 0, fmt::format("Function with name {} not found", name).c_str());
     this->m_function = function;
-    auto actualName = dynamic_cast<StringSymbol* >(this->m_symbolTable.getSymbol(function.name));
     auto prev = this->m_frame;
     auto frame = new Frame();
     frame->pc = 0;
     frame->m_instructions = function.instructions;
-    if(actualName->value[0] == '<') { // is initializer
+    if(ctor) { // is initializer
         if (prev != nullptr) {
             ASSERT(!prev->stack.empty(), "Initializer called without a structure");
             const auto& v = prev->stack.pop();
@@ -249,13 +284,14 @@ void VirtualMachine::step() {
     auto frame = this->m_frame;
     auto &stack = frame->stack;
     auto &locals = frame->locals;
-    auto &instruction = (*frame->m_instructions)[frame->pc++];
+    const auto &instruction = (*frame->m_instructions)[frame->pc++];
+    const auto &operands = instruction.operands;
     switch (instruction.opcode) {
         case STORE_IN_THIS: {
-            auto &name = instruction.operands[0];
-            auto &typeName = instruction.operands[1];
+            auto &name = operands[0];
+            auto &typeName = operands[1];
             auto value = stack.pop();
-            auto v = get_if<Struct>(&locals[m_staticNames.thisName]->v);
+            auto v = locals[m_staticNames.thisName]->toStruct();
             ASSERT(v != nullptr, "'this' is not a structure");
             auto &f = (*v).fields[name];
             f.value = value;
@@ -264,17 +300,17 @@ void VirtualMachine::step() {
             break;
         }
         case LOAD_FROM_THIS: {
-            auto &index = instruction.operands[0];
-            auto v = get_if<Struct>(&locals[m_staticNames.thisName]->v);
+            auto &index = operands[0];
+            auto v = locals[m_staticNames.thisName]->toStruct();
             ASSERT(v != nullptr, "'this' is not a structure");
             stack.push((*v).fields[index].value);
             break;
         }
         case STORE_FIELD: {
-            auto &name = instruction.operands[0];
+            auto &name = operands[0];
             auto value = stack.pop();
             auto structure = stack.pop();
-            auto v = get_if<Struct>(&structure->v);
+            auto v = structure->toStruct();
             if(v == nullptr) {
                 err::E0001.throwError(fmt::format("#{:x} store_field failed: structure is not a structure", frame->pc));
             }
@@ -298,20 +334,20 @@ void VirtualMachine::step() {
         case STORE_ATTRIBUTE:
             break;
         case STORE_LOCAL: {
-            auto &index = instruction.operands[0];
+            auto &index = operands[0];
             //auto &typeName = instruction.operands[1];
             locals[index] = stack.pop();
             break;
         }
         case LOAD_LOCAL: {
-            auto &index = instruction.operands[0];
+            auto &index = operands[0];
             if(!locals.contains(index))
                 err::E0003.throwError(fmt::format("No variable named '{}' found.", lookupString(index)), {}, 0);
             stack.push(locals[index]);
             break;
         }
         case LOAD_SYMBOL: {
-            auto &index = instruction.operands[0];
+            auto &index = operands[0];
             auto symbol = this->m_symbolTable.getSymbol(index);
             auto value = newValue();
             switch (symbol->type) {
@@ -321,11 +357,11 @@ void VirtualMachine::step() {
                     break;
                 }
                 case SymbolType::UNSIGNED_INTEGER: {
-                    value->v = (u128) dynamic_cast<UISymbol*>(symbol)->value;
+                    value->setValue((u128) dynamic_cast<UISymbol*>(symbol)->value);
                     break;
                 }
                 case SymbolType::SIGNED_INTEGER: {
-                    value->v = (i128) dynamic_cast<SISymbol*>(symbol)->value;
+                    value->setValue((i128) dynamic_cast<SISymbol*>(symbol)->value);
                     break;
                 }
             }
@@ -333,33 +369,42 @@ void VirtualMachine::step() {
             break;
         }
         case NEW_STRUCT: {
-            auto &name = instruction.operands[0];
+            auto &name = operands[0];
             auto value = newValue();
             Struct structure = {};
             structure.typeName = name;
             structure.fields = {};
-            value->v = structure;
+            value->setValue(structure);
             value->address = this->m_address;
             stack.push(value);
             break;
         }
+        case READ_ARRAY: {
+            if(!readValue(operands[0], (TypeId) (operands[1]), true)) return;
+            auto value = stack.pop();
+            auto size = stack.pop()->toUnsigned();
+            auto array = newValue();
+            StaticArray a = {value, (u16) size};
+            array->setValue(a);
+            stack.push(array);
+            this->m_address += (size-1) * value->size;
+            break;
+        }
         case READ_VALUE: {
-            auto v = readStaticValue(instruction.operands[0]);
-            stack.push(v);
-            this->m_address += v->size;
+            readValue(operands[0], (TypeId) operands[1]);
             break;
         }
         case READ_FIELD: {
-            auto &name = instruction.operands[0];
-            auto &typeName = instruction.operands[1];
-            auto v = get_if<Struct>(&locals[m_staticNames.thisName]->v);
+            auto &name = operands[0];
+            auto &type = operands[1];
+            auto id = (TypeId) operands[2];
+            auto v = locals[m_staticNames.thisName]->toStruct();
             ASSERT(v != nullptr, "'this' is not a structure");
-            auto value = readStaticValue(instruction.operands[2]);
-            this->m_address += value->size;
+            if(!readValue(type, id, true)) return;
             auto &f = (*v).fields[name];
-            f.value = value;
+            f.value = stack.pop();
             f.name = name;
-            f.typeName = typeName;
+            f.typeName = type;
             break;
         }
         COMPARE_CASE(EQ, Condition::EQUAL)
@@ -371,15 +416,12 @@ void VirtualMachine::step() {
         case NOT: {
             auto a = stack.pop();
             auto res = newValue();
-            res->v = !a->v.toBool();
+            res->setValue(!a->toBoolean());
             stack.push(res);
             break;
         }
         case CMP: {
-            auto b = stack.pop();
-            auto res = get_if<bool>(&b->v);
-            ASSERT(res != nullptr, "CMP: operand is not comparable (bool)");
-            if(*res) frame->pc++;
+            if(stack.pop()->toBoolean()) frame->pc++;
             break;
         }
         case JMP: {
@@ -395,7 +437,7 @@ void VirtualMachine::step() {
         case EXPORT: {
             auto pattern = convert(stack.pop());
             pattern->setVariableName(lookupString(instruction.operands[0]));
-            this->m_patterns.push_back(pattern);
+            this->m_patterns.push_back(std::move(pattern));
             break;
         }
         case RETURN: {
@@ -416,45 +458,61 @@ void VirtualMachine::accessData(u64 address, void *buffer, size_t size, u64 sect
     }
 }
 
-Value VirtualMachine::compare(const Value& b, const Value& a, Condition condition) {
+template<typename A, typename B>
+bool VirtualMachine::compare(const A &a, const B &b, VirtualMachine::Condition condition) {
+    switch (condition) {
+        case Condition::EQUAL:
+            return a == b;
+        case Condition::NOT_EQUAL:
+            return a != b;
+        case Condition::LESS:
+            return a < b;
+        case Condition::LESS_EQUAL:
+            return a <= b;
+        case Condition::GREATER:
+            return a > b;
+        case Condition::GREATER_EQUAL:
+            return a >= b;
+    }
+}
+
+Value VirtualMachine::compareValues(const Value& b, const Value& a, Condition condition) {
     auto res = newValue();
     if(UNLIKELY(a == b)) { // same object
-        res->v = true;
-    } else if(a->v.index() == b->v.index()) { // same type, no conversion needed
-        res->v = a->v == b->v;
-    } else { // symbolic comparison
-        auto &va = a->v;
-        auto &vb = b->v;
-        switch(va.index()) {
-            case 0: // BOOL
-            case 1: // U128
-            case 2: { // I128
-                // do numeric comparison
-                u128 ia = va.toInteger();
-                u128 ib = vb.toInteger();
-                switch (condition) {
-                    case Condition::EQUAL:
-                        res->v = ia == ib;
-                        break;
-                    case Condition::NOT_EQUAL:
-                        res->v = ia != ib;
-                        break;
-                    case Condition::GREATER:
-                        res->v = ia > ib;
-                        break;
-                    case Condition::GREATER_EQUAL:
-                        res->v = ia >= ib;
-                        break;
-                    case Condition::LESS:
-                        res->v = ia < ib;
-                        break;
-                    case Condition::LESS_EQUAL:
-                        res->v = ia <= ib;
-                        break;
-                }
-            }
+        res->setValue(true);
+    } else if(a->m_value.index() == b->m_value.index()) { // same type, no conversion needed
+        switch (condition) {
+            case Condition::EQUAL:
+                res->setValue(a->m_value == b->m_value);
+                break;
+            case Condition::NOT_EQUAL:
+                res->setValue(a->m_value != b->m_value);
+                break;
+            case Condition::LESS:
+                res->setValue(a->m_value < b->m_value);
+                break;
+            case Condition::LESS_EQUAL:
+                res->setValue(a->m_value <= b->m_value);
+                break;
+            case Condition::GREATER:
+                res->setValue(a->m_value > b->m_value);
+                break;
+            case Condition::GREATER_EQUAL:
+                res->setValue(a->m_value >= b->m_value);
+                break;
         }
+    } else { // symbolic comparison
+        /*bool result = std::visit(wolv::util::overloaded {
+            [](auto&, auto&) {
+                return false;
+            }
+        }, a->m_value, b->m_value);*/
+        return res;
     }
 
     return res;
+}
+
+Value pl::core::newValue() {
+    return std::make_shared<impl::ValueImpl>();
 }

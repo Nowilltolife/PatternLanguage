@@ -4,9 +4,11 @@
 #include <stack>
 
 #include "pl/core/bytecode/bytecode.hpp"
-#include "pl/core/vm/value.h"
+#include "pl/core/vm/value.hpp"
 
 namespace pl::core {
+
+    using pl::core::instr::Operand, pl::core::instr::SymbolId;
 
     template<typename T>
     static std::unique_ptr<T> create(const std::string &typeName, const std::string &varName, auto... args) {
@@ -45,7 +47,7 @@ namespace pl::core {
             this->m_io = ioOperations;
         }
 
-        [[nodiscard]] inline auto& getPatterns() const {
+        [[nodiscard]] auto& getPatterns() {
             return this->m_patterns;
         }
 
@@ -99,9 +101,16 @@ namespace pl::core {
 
     private:
         void accessData(u64 address, void *buffer, size_t size, u64 sectionId, bool write);
-        void enterFunction(u32 name);
+        void enterFunction(SymbolId name, bool ctor=false);
         void leaveFunction();
-        Value readStaticValue(u16 type);
+        /**
+         * Reads a value according to type id and pushes result to stack
+         * @param type type name of the value (must be a valid symbol id)
+         * @param id type id of value
+         * @param next will this value be used in this step
+         * @return {@code true} if read was successful, {@code false} a back jump is required
+         */
+        bool readValue(Operand type, instr::TypeInfo::TypeId id, bool next=false);
 
         template <typename T>
         class Stack : public std::deque<T> {
@@ -122,10 +131,11 @@ namespace pl::core {
         };
 
         struct Frame {
-            std::map<u32, Value> locals;
+            std::map<SymbolId, Value> locals;
             Stack<Value> stack;
             std::vector<instr::Instruction>* m_instructions;
             u64 pc;
+            bool escapeNow;
 
             ~Frame() {
                 locals.clear();
@@ -134,12 +144,17 @@ namespace pl::core {
         };
 
         struct StaticNames {
-            u32 thisName;
-            u32 mainName;
-            u32 globalName;
+            SymbolId thisName;
+            SymbolId mainName;
+            SymbolId globalName;
         };
 
-        instr::Bytecode::Function lookupFunction(u32 name) {
+        void callFunction(SymbolId name) {
+            this->enterFunction(name);
+            this->run();
+        }
+
+        instr::Bytecode::Function lookupFunction(SymbolId name) {
             for (auto& function : this->m_functions) {
                 if (function.name == name) {
                     return function;
@@ -148,9 +163,13 @@ namespace pl::core {
             return {};
         }
 
-        std::shared_ptr<ptrn::Pattern> convert(const Value& value);
+        instr::Bytecode::Function lookupConstructor(SymbolId name) {
+            return this->lookupFunction(this->m_symbolTable.newString("<init>" + this->m_symbolTable.getString(name)));
+        }
 
-        std::string lookupString(u32 name) {
+        std::unique_ptr<ptrn::Pattern> convert(const Value& value);
+
+        std::string lookupString(SymbolId name) {
             auto symbol = this->m_symbolTable.getSymbol(name);
             auto stringSymbol = dynamic_cast<instr::StringSymbol*>(symbol);
             if(stringSymbol == nullptr)
@@ -168,7 +187,7 @@ namespace pl::core {
         instr::SymbolTable m_symbolTable;
         std::vector<instr::Bytecode::Function> m_functions;
         instr::Bytecode::Function m_function;
-        std::vector<std::shared_ptr<ptrn::Pattern>> m_patterns;
+        std::vector<std::unique_ptr<ptrn::Pattern>> m_patterns;
         std::endian m_endian;
         BitfieldOrder m_bitfieldOrder;
         VMSettings m_settings;
@@ -186,6 +205,8 @@ namespace pl::core {
             GREATER_EQUAL
         };
 
-        static Value compare(const Value& b, const Value& a, Condition condition);
+        template <typename A, typename B>
+        static bool compare(const A& a, const B& b, Condition condition);
+        static Value compareValues(const Value& b, const Value& a, Condition condition);
     };
 }

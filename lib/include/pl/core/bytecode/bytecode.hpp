@@ -1,14 +1,16 @@
 #pragma once
 
 #include <string>
+#include <utility>
 
+#include <pl/core/bytecode/type.hpp>
+#include <pl/core/bytecode/symbol.hpp>
 #include <pl/helpers/types.hpp>
 #include <pl/core/token.hpp>
-#include <utility>
 
 namespace pl::core::instr {
 
-    constexpr static const char * const this_name = "<this>";
+    constexpr static const char * const this_name = "this";
     constexpr static const char * const ctor_name = "<init>";
     constexpr static const char * const main_name = "<main>";
 
@@ -20,7 +22,7 @@ namespace pl::core::instr {
         READ_VALUE, READ_FIELD,
         LOAD_SYMBOL, CALL,
         EXPORT, DUP, POP,
-
+        READ_ARRAY,
         EQ, NEQ,
         GT, GTE,
         LT, LTE,
@@ -36,6 +38,7 @@ namespace pl::core::instr {
         "read_value", "read_field",
         "load_symbol", "call",
         "export", "dup", "pop",
+        "read_array",
         "eq", "neq",
         "gt", "gte",
         "lt", "lte",
@@ -43,158 +46,13 @@ namespace pl::core::instr {
         "jmp", "return"
     };
 
-    enum SymbolType {
-        STRING,
-        UNSIGNED_INTEGER,
-        SIGNED_INTEGER,
-    };
-
-    struct Symbol {
-        u16 type{};
-
-        virtual ~Symbol() = default;
-        [[nodiscard]] virtual std::string toString() const = 0;
-        [[nodiscard]] virtual u64 hash() const = 0;
-    };
-
-    struct StringSymbol : Symbol {
-        explicit StringSymbol(std::string string) : value(std::move(string)) {
-            this->type = STRING;
-        }
-
-        std::string value;
-
-        ~StringSymbol() override = default;
-        [[nodiscard]] std::string toString() const override {
-            return this->value;
-        }
-
-        [[nodiscard]] u64 hash() const override {
-            return std::hash<std::string>{}(this->value);
-        }
-    };
-
-    struct UISymbol : Symbol {
-        explicit UISymbol(u64 value) : value(value) {
-            this->type = UNSIGNED_INTEGER;
-        }
-
-        u64 value;
-
-        ~UISymbol() override = default;
-        [[nodiscard]] std::string toString() const override {
-            return std::to_string(this->value);
-        }
-
-        [[nodiscard]] u64 hash() const override {
-            return std::hash<u64>{}(this->value);
-        }
-    };
-
-    class SISymbol : public Symbol {
-    public:
-        explicit SISymbol(i64 value) : value(value) {
-            this->type = SIGNED_INTEGER;
-        }
-
-        i64 value;
-
-        ~SISymbol() override = default;
-        [[nodiscard]] std::string toString() const override {
-            return std::to_string(this->value);
-        }
-
-        [[nodiscard]] u64 hash() const override {
-            return std::hash<i64>{}(this->value);
-        }
-    };
-
-    class SymbolTable {
-    public:
-        SymbolTable() : m_symbols() {
-            this->m_symbols.push_back(nullptr); // increase index by 1
-        }
-
-        SymbolTable(const SymbolTable &other) = default;
-
-        SymbolTable(SymbolTable &&other) noexcept {
-            this->m_symbols = std::move(other.m_symbols);
-        }
-
-        SymbolTable &operator=(const SymbolTable &other) = default;
-
-        SymbolTable &operator=(SymbolTable &&other) noexcept {
-            this->m_symbols = std::move(other.m_symbols);
-            return *this;
-        }
-
-        ~SymbolTable() = default;
-
-        [[nodiscard]] u16 newString(const std::string& str) {
-            auto symbol = new StringSymbol { str };
-            return this->addSymbol(symbol);
-        }
-
-        [[nodiscard]] u16 newUnsignedInteger(u64 value) {
-            auto symbol = new UISymbol { value };
-            return this->addSymbol(symbol);
-        }
-
-        [[nodiscard]] u16 newSignedInteger(i64 value) {
-            auto symbol = new SISymbol { value };
-            return this->addSymbol(symbol);
-        }
-
-        [[nodiscard]] u16 addSymbol(Symbol *symbol) {
-            // see if symbol already exists
-            for (u16 i = 1; i < m_symbols.size(); i++) {
-                if (m_symbols[i]->hash() == symbol->hash()) {
-                    delete symbol;
-                    return i;
-                }
-            }
-            auto result = m_symbols.size();
-            m_symbols.push_back(symbol);
-            return result;
-        }
-
-        [[nodiscard]] inline Symbol *getSymbol(u16 index) const {
-            return m_symbols[index];
-        }
-
-        [[nodiscard]] const std::string& getString(u16 index) const {
-            return static_cast<StringSymbol*>(this->getSymbol(index))->value;
-        }
-
-        [[nodiscard]] u64 getUnsignedInteger(u16 index) const {
-            return static_cast<UISymbol*>(this->getSymbol(index))->value;
-        }
-
-        [[nodiscard]] i64 getSignedInteger(u16 index) const {
-            return static_cast<SISymbol*>(this->getSymbol(index))->value;
-        }
-
-        void clear() {
-            for (auto symbol : m_symbols) {
-                delete symbol;
-            }
-            m_symbols.clear();
-            m_symbols.push_back(nullptr);
-        }
-
-        bool empty() const {
-            return m_symbols.size() == 1;
-        }
-
-    private:
-        std::vector<Symbol*> m_symbols;
-    };
+    using JumpOffset = i16;
 
     struct Instruction {
         Opcode opcode;
-        std::vector<u16> operands{};
+        std::vector<Operand> operands{};
 
-        std::string toString(const SymbolTable& symbols) const {
+        [[nodiscard]] std::string toString(const SymbolTable& symbols) const {
             std::string ss = std::string(opcodeNames[opcode]) + ' ';
             switch (opcode) {
                 case STORE_FIELD:
@@ -205,26 +63,26 @@ namespace pl::core::instr {
                 case LOAD_FROM_THIS:
                 case LOAD_SYMBOL:
                 case CALL: {
-                    u16 index = operands[0];
+                    SymbolId index = operands[0];
                     return ss + '#' + std::to_string(index) + " (" + symbols.getSymbol(index)->toString() + ")";
                 }
                 case JMP: {
-                    i16 index = (i16) operands[0];
+                    auto index = (JumpOffset) operands[0];
                     return ss + (index > 0 ? '+' : '-') + std::to_string(index);
                 }
                 case READ_VALUE: {
-                    auto t = static_cast<Token::ValueType>(operands[0]);
+                    auto id = static_cast<TypeInfo::TypeId>(operands[1]);
 
-                    return ss + std::to_string(operands[0]) + " (" + Token::getTypeName(t) + ")";
+                    return ss + symbols.getString(operands[0]) + " (" + TypeInfo::getTypeName(id) + ")";
                 }
                 case READ_FIELD: {
                     u16 index1 = operands[0];
                     u16 index2 = operands[1];
-                    auto t = static_cast<Token::ValueType>(operands[2]);
+                    auto id = static_cast<TypeInfo::TypeId>(operands[2]);
 
                     ss += '#' + std::to_string(index1) + " (" + symbols.getSymbol(index1)->toString() + "), ";
-                    ss += '#' + std::to_string(index2) + " (" + symbols.getSymbol(index2)->toString() + "), ";
-                    return ss + std::to_string(operands[2]) + " (" + Token::getTypeName(t) + ")";
+                    ss += '#' + std::to_string(index2) + " (" + symbols.getSymbol(index2)->toString() + ") ";
+                    return ss + "(" + TypeInfo::getTypeName(id) + ")";
                 }
                 case STORE_IN_THIS:
                 case STORE_LOCAL: {
@@ -252,7 +110,7 @@ namespace pl::core::instr {
         };
 
         struct Label {
-            u16 targetPc;
+            u16 targetPc{};
             std::vector<std::pair<u16, u16>> targets;
         };
 
@@ -297,17 +155,21 @@ namespace pl::core::instr {
             wolv::util::unused(this->addInstruction({ STORE_ATTRIBUTE, { this->m_symbolTable.newString(name) } }));
         }
 
-        void read_value(u16 type) {
-            wolv::util::unused(this->addInstruction({ READ_VALUE, { type }}));
+        void read_value(TypeInfo info) {
+            wolv::util::unused(this->addInstruction({ READ_VALUE, { info.name, info.id }}));
         }
 
-        void read_field(const std::string& name, const std::string& typeName, u16 type) {
+        void read_array(TypeInfo info) {
+            wolv::util::unused(this->addInstruction({ READ_ARRAY, { info.name, info.id }}));
+        }
+
+        void read_field(const std::string& name, TypeInfo info) {
             wolv::util::unused(this->addInstruction({
                                                      READ_FIELD,
                                                      {
                                                              this->m_symbolTable.newString(name),
-                                                             this->m_symbolTable.newString(typeName),
-                                                             type
+                                                             info.name,
+                                                             info.id
                                                      }
                                              }));
         }
@@ -412,6 +274,8 @@ namespace pl::core::instr {
         [[nodiscard]] SymbolTable &getSymbolTable() {
             return m_symbolTable;
         }
+
+        [[nodiscard]] std::pair<TypeInfo, std::string> getTypeInfo(const std::shared_ptr<ast::ASTNode>& typeNode);
 
         EmitterFlags flags;
 

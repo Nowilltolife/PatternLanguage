@@ -14,6 +14,7 @@ using namespace pl;
 using namespace pl::core;
 using namespace pl::core::ast;
 using namespace pl::core::instr;
+using TypeId = pl::core::instr::TypeInfo::TypeId;
 using Label = pl::core::instr::BytecodeEmitter::Label;
 
 std::string getTypeName(const std::shared_ptr<ASTNodeTypeDecl> &typeDecl) {
@@ -28,34 +29,38 @@ std::string getTypeName(const std::shared_ptr<ASTNodeTypeDecl> &typeDecl) {
     }
 }
 
+std::pair<TypeInfo, std::string> BytecodeEmitter::getTypeInfo(const std::shared_ptr<ASTNode>& typeNode) {
+    std::string typeName;
+    if(auto builtinType = dynamic_cast<ASTNodeBuiltinType*>(typeNode.get()); builtinType != nullptr) {
+        auto bType = builtinType->getType();
+        typeName = Token::getTypeName(bType);
+        return {{TypeInfo::fromLiteral(bType), getSymbolTable().newString(Token::getTypeName(bType))}, typeName};
+    } else if(auto typeDecl = dynamic_cast<ASTNodeTypeDecl*>(typeNode.get()); typeDecl != nullptr) {
+        if(auto structType = dynamic_cast<ASTNodeStruct*>(typeDecl->getType().get()); structType != nullptr) {
+            typeName = typeDecl->getName();
+        }
+        return {{TypeId::Structure, getSymbolTable().newString(typeName)}, typeName};
+    } else {
+        return {{(TypeId) 0, 0}, ""};
+    }
+}
+
 void variableRead(const ASTNodeVariableDecl* var, BytecodeEmitter &emitter, bool local) {
     auto &type = var->getType()->getType();
     //auto &placementOffset = var->getPlacementOffset();
     const std::string& name = var->getName();
-    std::string typeName;
-    if(auto builtinType = dynamic_cast<ASTNodeBuiltinType*>(type.get()); builtinType != nullptr) {
-        auto bType = builtinType->getType();
-        typeName = Token::getTypeName(bType);
-        if(local) {
-            emitter.read_value((u16) bType);
-        } else {
-            emitter.read_field(name, typeName, (u16) bType);
-        }
-    } else if(auto typeDecl = dynamic_cast<ASTNodeTypeDecl*>(type.get()); typeDecl != nullptr) {
-        if(auto structType = dynamic_cast<ASTNodeStruct*>(typeDecl->getType().get()); structType != nullptr) {
-            typeName = typeDecl->getName();
-            emitter.new_struct(typeName);
-            emitter.call(instr::ctor_name + typeName);
-            if(!local) emitter.store_field(name, typeName, true);
-        }
-    } else {
-        err::P0002.throwError("Don't know how to emit non-builtin type", {}, 0);
+    auto [typeInfo, typeName] = emitter.getTypeInfo(type);
+    if(typeInfo.name == 0) {
+        err::P0002.throwError("Can't declare variable of this type", {}, 0);
     }
     if(local) {
+        emitter.read_value(typeInfo);
         emitter.local(name, typeName);
         emitter.dup();
         emitter.store_local(name, typeName);
         emitter.export_(name);
+    } else {
+        emitter.read_field(name, typeInfo);
     }
 }
 

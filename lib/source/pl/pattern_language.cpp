@@ -134,8 +134,8 @@ namespace pl {
             + ", Compilation time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(compileEnd - compileStart).count()) + "s"
             + ", Total time: " + std::to_string(std::chrono::duration_cast<std::chrono::duration<double>>(executionEnd - compileStart).count()) + "s"
         );
-        for (const auto &pattern : m_internals.vm->getPatterns()) {
-            this->m_patterns[pattern->getSection()].push_back(pattern);
+        for(auto &pattern : vm->getPatterns()) {
+            this->m_patterns[pattern->getSection()].push_back(std::move(pattern));
         }
         this->m_patterns.erase(ptrn::Pattern::HeapSectionId);
 
@@ -264,8 +264,8 @@ namespace pl {
         return *new std::map<u64, api::Section>();
     }
 
-    [[nodiscard]] const std::vector<std::shared_ptr<ptrn::Pattern>> &PatternLanguage::getAllPatterns(u64 section) const {
-        static const std::vector<std::shared_ptr<pl::ptrn::Pattern>> empty;
+    [[nodiscard]] const std::vector<std::unique_ptr<ptrn::Pattern>> &PatternLanguage::getAllPatterns(u64 section) const {
+        static const std::vector<std::unique_ptr<pl::ptrn::Pattern>> empty;
         if (this->m_patterns.contains(section))
             return this->m_patterns.at(section);
         else
