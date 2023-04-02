@@ -39,15 +39,28 @@ namespace pl::core {
         Value value;
     };
 
+    struct TypedValue {
+        Value value;
+        SymbolId type;
+    };
+
     struct Struct : Object {
-        std::map<SymbolId, Field> fields;
+        std::map<SymbolId, Field> fields; // name -> field
     };
 
     struct StaticArray {
         Value templateValue; // template value is also start, it contains base size, section and address
+        SymbolId type; // type of array
         u16 size; // size of array, final size = base size * size
 
         auto operator<=>(const StaticArray&) const = default;
+    };
+
+    struct DynamicArray {
+        std::vector<Value> values; // contained values
+        SymbolId type; // type of array
+
+        auto operator<=>(const DynamicArray&) const = default;
     };
 
     namespace impl {
@@ -138,6 +151,14 @@ namespace pl::core {
             }
 
             /**
+             * Convert this value to a dynamic array reference
+             * @return dynamic array reference, @c nullptr if this value is not a dynamic array
+             */
+            [[nodiscard]] inline DynamicArray* toDynamicArray() {
+                return std::get_if<DynamicArray>(&this->m_value);
+            }
+
+            /**
              * Determine if this value is an integer
              * @return @c true if this value is an integer, @c false otherwise
              */
@@ -201,12 +222,13 @@ namespace pl::core {
                     [&t](Field *field) -> T { return field->value->primitiveVisit<T>(t); },
                     [&t](const Struct&) -> T { err::E0004.throwError(fmt::format("Cannot cast value to type '{}'", t)); },
                     [&t](const StaticArray&) -> T { err::E0004.throwError(fmt::format("Cannot cast value to type '{}'", t)); },
+                    [&t](const DynamicArray&) -> T { err::E0004.throwError(fmt::format("Cannot cast value to type '{}'", t)); },
                     [](auto &&result) -> T { return result; }
                 }, m_value);
             }
 
         protected:
-            std::variant<bool, u128, i128, double, Value, Field*, Struct, StaticArray> m_value;
+            std::variant<bool, u128, i128, double, Value, Field*, Struct, StaticArray, DynamicArray> m_value;
         };
     }
 

@@ -30,6 +30,10 @@ namespace pl::core::ast {
             this->m_column = column;
         }
 
+        [[nodiscard]] virtual std::unique_ptr<ASTNode> resolveType() const {
+            return this->clone();
+        }
+
         virtual void emit(instr::Bytecode& bytecode, instr::BytecodeEmitter& emitter) {
             wolv::util::unused(bytecode, emitter);
             err::E0001.throwError("Non implemented instr emitter.", "This is a evaluator bug!", this);

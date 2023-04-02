@@ -20,21 +20,21 @@ namespace pl::lib::libstd {
     // TODO: Adapt to new vm system
     void registerPragmas(pl::PatternLanguage &runtime) {
         wolv::util::unused(runtime);
-        /*runtime.addPragma("endian", [](pl::PatternLanguage &runtime, const std::string &value) {
+        runtime.addPragma("endian", [](pl::PatternLanguage &runtime, const std::string &value) {
             if (value == "big") {
-                runtime.getInternals().evaluator->setDefaultEndian(std::endian::big);
+                runtime.getInternals().vm->setDefaultEndian(std::endian::big);
                 return true;
             } else if (value == "little") {
-                runtime.getInternals().evaluator->setDefaultEndian(std::endian::little);
+                runtime.getInternals().vm->setDefaultEndian(std::endian::little);
                 return true;
             } else if (value == "native") {
-                runtime.getInternals().evaluator->setDefaultEndian(std::endian::native);
+                runtime.getInternals().vm->setDefaultEndian(std::endian::native);
                 return true;
             } else
                 return false;
         });
 
-        runtime.addPragma("eval_depth", [](pl::PatternLanguage &runtime, const std::string &value) {
+        /*runtime.addPragma("eval_depth", [](pl::PatternLanguage &runtime, const std::string &value) {
             auto limit = parseLimit(value);
             if (!limit.has_value())
                 return false;

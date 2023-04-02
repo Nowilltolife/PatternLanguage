@@ -64,21 +64,42 @@ namespace pl::core::ast {
         }
 
         void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override {
-            this->m_size->emit(bytecode, emitter);
-            auto &type = getType()->getType();
+            auto type = getType()->resolveType();
             //auto &placementOffset = var->getPlacementOffset();
             const std::string& name = getName();
-            auto [typeInfo, typeName] = emitter.getTypeInfo(type);
-            if(!emitter.flags.ctor) {
-                emitter.read_array(typeInfo);
-                emitter.local(name, typeName);
-                emitter.dup();
-                emitter.store_local(name, typeName);
-                emitter.export_(name);
-            } else {
-                emitter.read_array(typeInfo);
-                emitter.store_field(name, typeName, true);
+            auto [typeInfo, typeName] = emitter.getTypeInfo(type, emitter.getTypeName(getType()));
+            bool isArrayStatic = instr::TypeInfo::isBuiltin(typeInfo.id);
+            if(!isArrayStatic) {
+                if(auto attributable = dynamic_cast<Attributable *>(type.get())) {
+                    isArrayStatic = attributable->hasAttribute("static", false);
+                }
             }
+            auto whileStatement = dynamic_cast<ASTNodeWhileStatement *>(m_size.get());
+            bool isIndexStatic = whileStatement == nullptr;
+            if(isArrayStatic) {
+                emitter.read_value(typeInfo);
+                if(isIndexStatic) {
+                    m_size->emit(bytecode, emitter);
+                    emitter.read_static_array_with_size(typeInfo);
+                } else {
+                    auto loop = emitter.label();
+                    emitter.place_label(loop);
+                    whileStatement->getCondition()->emit(bytecode, emitter);
+                    emitter.read_static_array(loop.targetPc, typeInfo);
+                }
+            } else {
+                // dynamic array
+                if(isIndexStatic) {
+                    m_size->emit(bytecode, emitter);
+                    emitter.read_dynamic_array_with_size(typeInfo);
+                } else {
+                    auto loop = emitter.label();
+                    emitter.place_label(loop);
+                    whileStatement->getCondition()->emit(bytecode, emitter);
+                    emitter.read_dynamic_array(loop.targetPc, typeInfo);
+                }
+            }
+            emitter.store_value(name, typeName);
         }
 
     private:

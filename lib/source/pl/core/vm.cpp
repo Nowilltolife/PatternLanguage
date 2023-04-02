@@ -10,6 +10,7 @@
 #include <pl/patterns/pattern_boolean.hpp>
 #include <pl/patterns/pattern_float.hpp>
 #include <pl/patterns/pattern_array_static.hpp>
+#include <pl/patterns/pattern_array_dynamic.hpp>
 #include <pl/helpers/utils.hpp>
 
 #if defined(__clang__)
@@ -176,7 +177,23 @@ std::unique_ptr<Pattern> VirtualMachine::convert(const Value& value) {
         },
         [&](const StaticArray& array) {
             auto pattern = std::make_unique<PatternArrayStatic>(nullptr, value->address, array.size * array.templateValue->size);
-            pattern->setEntries(convert(array.templateValue), array.size);
+            auto templatePattern = convert(array.templateValue);
+            templatePattern->setTypeName(lookupString(array.type));
+            pattern->setEntries(std::move(templatePattern), array.size);
+            return (std::unique_ptr<Pattern>) std::move(pattern);
+        },
+        [&](const DynamicArray& array) {
+            std::vector<std::shared_ptr<Pattern>> entries;
+            u16 size = 0;
+            for (const auto& entry: array.values) {
+                auto newEntry = std::shared_ptr<Pattern>(convert(entry).release());
+                newEntry->setVariableName(fmt::format("[{}]", entries.size()));
+                newEntry->setTypeName(lookupString(array.type));
+                entries.push_back(newEntry);
+                size += newEntry->getSize();
+            }
+            auto pattern = std::make_unique<PatternArrayDynamic>(nullptr, value->address, size);
+            pattern->setEntries(std::move(entries));
             return (std::unique_ptr<Pattern>) std::move(pattern);
         },
         [&](const Value& value) {
@@ -379,15 +396,90 @@ void VirtualMachine::step() {
             stack.push(value);
             break;
         }
-        case READ_ARRAY: {
-            if(!readValue(operands[0], (TypeId) (operands[1]), true)) return;
+        case READ_STATIC_ARRAY: {
+            auto cond = stack.pop();
+            auto &state = frame->arrayState;
+            if(state.size == 0) {
+                state.templateValue = stack.pop();
+                state.size = state.templateValue->size;
+            }
+            if(cond->toBoolean()) {
+                state.index++;
+                this->m_address += state.size;
+                frame->pc = operands[0];
+            } else {
+                auto array = newValue();
+                StaticArray staticArray = {};
+                staticArray.templateValue = state.templateValue;
+                staticArray.type = operands[1];
+                staticArray.size = state.index * state.size;
+                array->setValue(staticArray);
+                array->size = staticArray.size;
+                array->address = this->m_address;
+                stack.push(array);
+                state = {};
+            }
+            break;
+        }
+        case READ_DYNAMIC_ARRAY: {
+            if(frame->escapeNow) stack.swap();
+            auto cond = stack.pop();
+            auto &state = frame->arrayState;
+            if(state.index == 0) {
+                state.array = {};
+            }
+            if(cond->toBoolean()) {
+                if(!readValue(operands[1], (TypeId) operands[2], true)) {
+                    stack.push(cond);
+                    return;
+                }
+                state.index++;
+                auto value = stack.pop();
+                state.array.values.push_back(value);
+                state.size += value->size;
+                frame->pc = operands[0];
+            } else {
+                auto array = newValue();
+                state.array.type = operands[1];
+                array->setValue(state.array);
+                array->address = this->m_address;
+                array->size = state.size;
+                stack.push(array);
+                state = {};
+            }
+            break;
+        }
+        case READ_DYNAMIC_ARRAY_WITH_SIZE: {
+            auto &state = frame->arrayState;
+            if(state.size == 0) {
+                auto size = stack.pop()->toUnsigned();
+                state = {0, size, operands[0], (TypeId) operands[1], {{}, operands[0]}, {}};
+                frame->pc--;
+            } else {
+                if(!readValue(state.type, state.id, true)) return;
+                auto value = stack.pop();
+                state.array.values.push_back(value);
+                state.index++;
+                if(state.index == state.size) {
+                    auto array = newValue();
+                    array->setValue(state.array);
+                    stack.push(array);
+                    state = {};
+                } else {
+                    frame->pc--;
+                }
+            }
+            break;
+        }
+        case READ_STATIC_ARRAY_WITH_SIZE: {
+            auto size = stack.pop()->toSigned();
             auto value = stack.pop();
-            auto size = stack.pop()->toUnsigned();
             auto array = newValue();
-            StaticArray a = {value, (u16) size};
+            StaticArray a = {value, operands[0], static_cast<u16>(size)};
             array->setValue(a);
+            array->address = this->m_address - value->size;
+            array->size = value->size * size;
             stack.push(array);
-            this->m_address += (size-1) * value->size;
             break;
         }
         case READ_VALUE: {

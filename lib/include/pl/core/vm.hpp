@@ -108,14 +108,14 @@ namespace pl::core {
          * @param type type name of the value (must be a valid symbol id)
          * @param id type id of value
          * @param next will this value be used in this step
-         * @return {@code true} if read was successful, {@code false} a back jump is required
+         * @return @c true if read was successful, @c false a back jump is required
          */
         bool readValue(Operand type, instr::TypeInfo::TypeId id, bool next=false);
 
         template <typename T>
         class Stack : public std::deque<T> {
         public:
-            void push(T value) {
+            inline void push(T value) {
                 this->push_back(value);
             }
 
@@ -125,8 +125,19 @@ namespace pl::core {
                 return value;
             }
 
-            T top() {
+            inline T top() {
                 return this->back();
+            }
+
+            inline void dup() {
+                this->push(this->back());
+            }
+
+            inline void swap() {
+                T a = this->pop();
+                T b = this->pop();
+                this->push(a);
+                this->push(b);
             }
         };
 
@@ -136,6 +147,14 @@ namespace pl::core {
             std::vector<instr::Instruction>* m_instructions;
             u64 pc;
             bool escapeNow;
+            struct {
+                u128 index;
+                u128 size;
+                Operand type;
+                instr::TypeInfo::TypeId id;
+                DynamicArray array;
+                Value templateValue;
+            } arrayState;
 
             ~Frame() {
                 locals.clear();

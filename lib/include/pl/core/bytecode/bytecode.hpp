@@ -11,18 +11,25 @@
 namespace pl::core::instr {
 
     constexpr static const char * const this_name = "this";
+    constexpr static const char * const address_name = "$";
     constexpr static const char * const ctor_name = "<init>";
     constexpr static const char * const main_name = "<main>";
 
     enum Opcode {
         STORE_FIELD, LOAD_FIELD,
         STORE_IN_THIS, LOAD_FROM_THIS,
-        STORE_ATTRIBUTE, STORE_LOCAL,
-        LOAD_LOCAL, NEW_STRUCT,
+        STORE_ATTRIBUTE,
+        STORE_LOCAL, LOAD_LOCAL,
         READ_VALUE, READ_FIELD,
-        LOAD_SYMBOL, CALL,
-        EXPORT, DUP, POP,
-        READ_ARRAY,
+        LOAD_SYMBOL,
+        CALL,
+        EXPORT,
+        DUP, POP,
+        NEW_STRUCT,
+        READ_STATIC_ARRAY,
+        READ_STATIC_ARRAY_WITH_SIZE,
+        READ_DYNAMIC_ARRAY,
+        READ_DYNAMIC_ARRAY_WITH_SIZE,
         EQ, NEQ,
         GT, GTE,
         LT, LTE,
@@ -33,12 +40,18 @@ namespace pl::core::instr {
     constexpr static const char * const opcodeNames[] = {
         "store_field", "load_field",
         "store_in_this", "load_from_this",
-        "store_attribute", "store_local",
-        "load_local", "new_struct",
+        "store_attribute",
+        "store_local", "load_local",
         "read_value", "read_field",
-        "load_symbol", "call",
-        "export", "dup", "pop",
-        "read_array",
+        "load_symbol",
+        "call",
+        "export",
+        "dup", "pop",
+        "new_struct",
+        "read_static_array",
+        "read_static_array_with_size",
+        "read_dynamic_array",
+        "read_dynamic_array_with_size",
         "eq", "neq",
         "gt", "gte",
         "lt", "lte",
@@ -47,6 +60,7 @@ namespace pl::core::instr {
     };
 
     using JumpOffset = i16;
+    using Pc = u16;
 
     struct Instruction {
         Opcode opcode;
@@ -159,8 +173,20 @@ namespace pl::core::instr {
             wolv::util::unused(this->addInstruction({ READ_VALUE, { info.name, info.id }}));
         }
 
-        void read_array(TypeInfo info) {
-            wolv::util::unused(this->addInstruction({ READ_ARRAY, { info.name, info.id }}));
+        void read_static_array(Pc offset, TypeInfo info) {
+            wolv::util::unused(this->addInstruction({ READ_STATIC_ARRAY, { (Operand) offset, info.name, info.id }}));
+        }
+
+        void read_static_array_with_size(TypeInfo info) {
+            wolv::util::unused(this->addInstruction({ READ_STATIC_ARRAY_WITH_SIZE, { info.name, info.id }}));
+        }
+
+        void read_dynamic_array(Pc offset, TypeInfo info) {
+            wolv::util::unused(this->addInstruction({ READ_DYNAMIC_ARRAY, { (Operand) offset, info.name, info.id }}));
+        }
+
+        void read_dynamic_array_with_size(TypeInfo info) {
+            wolv::util::unused(this->addInstruction({ READ_DYNAMIC_ARRAY_WITH_SIZE, { info.name, info.id }}));
         }
 
         void read_field(const std::string& name, TypeInfo info) {
@@ -176,6 +202,14 @@ namespace pl::core::instr {
 
         void load_symbol(u16 index) {
             wolv::util::unused(this->addInstruction({ LOAD_SYMBOL, { index } }));
+        }
+
+        void load_unsigned(u64 value) {
+            wolv::util::unused(this->addInstruction({ LOAD_SYMBOL, { this->m_symbolTable.newUnsignedInteger(value) } }));
+        }
+
+        void load_signed(i64 value) {
+            wolv::util::unused(this->addInstruction({ LOAD_SYMBOL, { this->m_symbolTable.newSignedInteger(value) } }));
         }
 
         void new_struct(const std::string& name) {
@@ -275,7 +309,9 @@ namespace pl::core::instr {
             return m_symbolTable;
         }
 
-        [[nodiscard]] std::pair<TypeInfo, std::string> getTypeInfo(const std::shared_ptr<ast::ASTNode>& typeNode);
+        [[nodiscard]] std::string getTypeName(const std::shared_ptr<ast::ASTNode>& typeNode) const;
+        [[nodiscard]] std::pair<TypeInfo, std::string> getTypeInfo(const std::unique_ptr<ast::ASTNode>& typeNode, const std::string& typeName);
+        void store_value(const std::string& name, std::string& typeName);
 
         EmitterFlags flags;
 

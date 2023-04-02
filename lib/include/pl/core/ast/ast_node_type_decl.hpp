@@ -55,6 +55,22 @@ namespace pl::core::ast {
         }
         [[nodiscard]] std::optional<std::endian> getEndian() const { return this->m_endian; }
 
+        [[nodiscard]] std::unique_ptr<ASTNode> resolveType() const override {
+            auto type = this->getType()->resolveType();
+
+            if (auto attributable = dynamic_cast<Attributable *>(type.get())) {
+                for (auto &attribute : this->getAttributes()) {
+                    auto copy = attribute->clone();
+                    if (auto node = dynamic_cast<ASTNodeAttribute *>(copy.get())) {
+                        attributable->addAttribute(std::unique_ptr<ASTNodeAttribute>(node));
+                        (void)copy.release();
+                    }
+                }
+            }
+
+            return type;
+        }
+
         void emit(instr::Bytecode &bytecode, instr::BytecodeEmitter &emitter) override;
 
         void addAttribute(std::unique_ptr<ASTNodeAttribute> &&attribute) override {
