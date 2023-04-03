@@ -63,6 +63,8 @@ namespace pl::core {
         auto operator<=>(const DynamicArray&) const = default;
     };
 
+    using Val = std::variant<bool, u128, i128, double, Value, Field*, Struct, StaticArray, DynamicArray>;
+
     namespace impl {
         struct ValueImpl {
             friend class pl::core::VirtualMachine;
@@ -206,15 +208,30 @@ namespace pl::core {
                         result += std::string(indent, ' ') + "}";
 
                         return result;
+                    } else if constexpr (std::is_same_v<T, StaticArray>) {
+                        if (arg.size == 0) return "{}";
+
+                        return fmt::format("{{ T: {}, S: {} }}", arg.templateValue->format(table, indent, recursionDepth), arg.size);
+                    } else if constexpr (std::is_same_v<T, DynamicArray>) {
+                        if (arg.values.empty()) return "[]";
+                        std::string result = "[ ";
+
+                        for (auto &value: arg.values) {
+                            result += fmt::format("{}{}, ", std::string(indent, ' '), value->format(table, indent, recursionDepth));
+                        }
+
+                        result += " ]";
+
+                        return result;
+                    } else {
+                        return "unknown";
                     }
-                    return "unknown";
                 }, m_value);
                 recursionDepth--;
                 return b;
             }
 
         private:
-
             template <typename T>
             inline T primitiveVisit(std::string_view t) const {
                 return std::visit(wolv::util::overloaded {
@@ -228,7 +245,7 @@ namespace pl::core {
             }
 
         protected:
-            std::variant<bool, u128, i128, double, Value, Field*, Struct, StaticArray, DynamicArray> m_value;
+            Val m_value;
         };
     }
 

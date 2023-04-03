@@ -103,12 +103,7 @@ namespace pl::lib::libstd::core {
             /* array_index() -> index */
             runtime.addFunction(nsStdCore, "array_index", FunctionParameterCount::none(), [](VirtualMachine *ctx, auto) -> std::optional<Token::Literal> {
                 wolv::util::unused(ctx);
-                auto index = ctx->getCurrentArrayIndex();
-
-                if (index.has_value())
-                    return u128(*index);
-                else
-                    return 0;
+                return (u128) ctx->getCurrentArrayIndex();
             });
 
             /* member_count(pattern) -> count */
