@@ -32,6 +32,10 @@ namespace pl::core::ast {
         [[nodiscard]] const std::vector<std::shared_ptr<ASTNode>> &getEntries() const { return this->m_entries; }
         void addEntry(std::unique_ptr<ASTNode> &&entry) { this->m_entries.emplace_back(std::move(entry)); }
 
+        void setNested() {
+            this->m_isNested = true;
+        }
+
     private:
         std::vector<std::shared_ptr<ASTNode>> m_entries;
 

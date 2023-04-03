@@ -1,7 +1,7 @@
 #pragma once
 
 #include <pl/core/errors/error.hpp>
-#include "pl/core/vm.hpp"
+#include <pl/core/vm.hpp>
 #include <pl/pattern_visitor.hpp>
 #include <pl/helpers/types.hpp>
 #include <pl/helpers/utils.hpp>
@@ -81,11 +81,7 @@ namespace pl::ptrn {
         [[nodiscard]] u32 getHeapAddress() const { return this->getOffset() >> 32; }
         virtual void setOffset(u64 offset) {
             if (this->m_offset != offset) {
-                if (this->m_evaluator)
-                    this->m_evaluator->patternDestroyed(this);
                 this->m_offset = offset;
-                if (this->m_evaluator)
-                    this->m_evaluator->patternCreated(this);
             }
         }
 
@@ -275,11 +271,7 @@ namespace pl::ptrn {
 
         virtual void setSection(u64 id) {
             if (this->m_section != id) {
-                if (this->m_evaluator)
-                    this->m_evaluator->patternDestroyed(this);
                 this->m_section = id;
-                if (this->m_evaluator)
-                    this->m_evaluator->patternCreated(this);
             }
         }
 

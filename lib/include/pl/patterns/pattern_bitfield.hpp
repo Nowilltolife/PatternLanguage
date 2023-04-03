@@ -6,8 +6,7 @@ namespace pl::ptrn {
 
     class PatternBitfieldMember : public Pattern {
     public:
-        PatternBitfieldField(core::VirtualMachine *evaluator, u64 offset, u8 bitOffset, u8 bitSize, Pattern *bitfieldPattern = nullptr)
-            : Pattern(evaluator, offset, 0), m_bitOffset(bitOffset), m_bitSize(bitSize), m_bitField(bitfieldPattern) { }
+        using Pattern::Pattern;
 
         virtual void setParentBitfield(PatternBitfieldMember *parent) = 0;
 
@@ -66,8 +65,8 @@ namespace pl::ptrn {
 
     class PatternBitfieldField : public PatternBitfieldMember {
     public:
-        PatternBitfieldField(core::Evaluator *evaluator, u64 offset, u8 bitOffset, u8 bitSize, PatternBitfieldMember *parentBitfield = nullptr)
-            : PatternBitfieldMember(evaluator, offset, (bitOffset + bitSize + 7) / 8), m_bitOffset(bitOffset), m_bitSize(bitSize), m_parentBitfield(parentBitfield) { }
+        PatternBitfieldField(core::VirtualMachine *evaluator, u64 offset, u8 bitOffset, u8 bitSize, PatternBitfieldMember *parentBitfield = nullptr)
+                : PatternBitfieldMember(evaluator, offset, (bitOffset + bitSize + 7) / 8), m_bitOffset(bitOffset), m_bitSize(bitSize), m_parentBitfield(parentBitfield) { }
 
         PatternBitfieldField(const PatternBitfieldField &other) : PatternBitfieldMember(other) {
             this->m_padding = other.m_padding;
@@ -81,7 +80,8 @@ namespace pl::ptrn {
         }
 
         [[nodiscard]] u128 readValue() const {
-            return this->getEvaluator()->readBits(this->getOffset(), this->getBitOffset(), this->getBitSize(), this->getSection(), this->getEndian());
+            //return this->getEvaluator()->readBits(this->getOffset(), this->getBitOffset(), this->getBitSize(), this->getSection(), this->getEndian());
+            return 0;
         }
 
         [[nodiscard]] core::Token::Literal getValue() const override {
@@ -151,8 +151,8 @@ namespace pl::ptrn {
                                  public Inlinable,
                                  public Iteratable {
     public:
-        PatternBitfieldArray(core::Evaluator *evaluator, u64 offset, u8 firstBitOffset, u128 totalBitSize)
-            : PatternBitfieldMember(evaluator, offset, (totalBitSize + 7) / 8), m_firstBitOffset(firstBitOffset), m_totalBitSize(totalBitSize) { }
+        PatternBitfieldArray(core::VirtualMachine *evaluator, u64 offset, u8 firstBitOffset, u128 totalBitSize)
+                : PatternBitfieldMember(evaluator, offset, (totalBitSize + 7) / 8), m_firstBitOffset(firstBitOffset), m_totalBitSize(totalBitSize) { }
 
         PatternBitfieldArray(const PatternBitfieldArray &other) : PatternBitfieldMember(other) {
             std::vector<std::shared_ptr<Pattern>> entries;
@@ -271,15 +271,7 @@ namespace pl::ptrn {
         }
 
         void forEachEntry(u64 start, u64 end, const std::function<void(u64, Pattern*)>& fn) override {
-            auto evaluator = this->getEvaluator();
-            auto startArrayIndex = evaluator->getCurrentArrayIndex();
-
-            ON_SCOPE_EXIT {
-                if (startArrayIndex.has_value())
-                    evaluator->setCurrentArrayIndex(*startArrayIndex);
-                else
-                    evaluator->clearCurrentArrayIndex();
-            };
+            auto evaluator = this->getVm();
 
             for (u64 i = start; i < std::min<u64>(end, this->m_sortedEntries.size()); i++) {
                 evaluator->setCurrentArrayIndex(i);
@@ -393,8 +385,8 @@ namespace pl::ptrn {
                             public Inlinable,
                             public Iteratable {
     public:
-        PatternBitfield(core::VirtualMachine *evaluator, u64 offset, size_t size)
-            : Pattern(evaluator, offset, size) { }
+        PatternBitfield(core::VirtualMachine *evaluator, u64 offset, u8 firstBitOffset, u128 totalBitSize)
+                : PatternBitfieldMember(evaluator, offset, (totalBitSize + 7) / 8), m_firstBitOffset(firstBitOffset), m_totalBitSize(totalBitSize) { }
 
         PatternBitfield(const PatternBitfield &other) : PatternBitfieldMember(other) {
             for (auto &field : other.m_fields)

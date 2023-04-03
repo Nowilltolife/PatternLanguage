@@ -4,7 +4,6 @@
 
 #include <pl/core/token.hpp>
 #include <pl/core/log_console.hpp>
-#include <pl/core/evaluator.hpp>
 #include <pl/patterns/pattern.hpp>
 #include <pl/lib/std/types.hpp>
 
@@ -46,13 +45,13 @@ namespace pl::lib::libstd::random {
             random.seed(std::chrono::system_clock::now().time_since_epoch().count());
 
             /* set_seed(seed) */
-            runtime.addFunction(nsStdRandom, "set_seed", FunctionParameterCount::exactly(1), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdRandom, "set_seed", FunctionParameterCount::exactly(1), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 random.seed(params[0].toUnsigned());
                 return {};
             });
 
             /* random(type, param1, param2) */
-            runtime.addFunction(nsStdRandom, "generate", FunctionParameterCount::exactly(3), [](Evaluator *, auto params) -> std::optional<Token::Literal> {
+            runtime.addFunction(nsStdRandom, "generate", FunctionParameterCount::exactly(3), [](VirtualMachine *, auto params) -> std::optional<Token::Literal> {
                 auto type = RandomType(params[0].toUnsigned());
 
                 switch (type) {
