@@ -20,6 +20,7 @@ namespace pl {
         this->m_internals.parser        = new core::Parser();
         this->m_internals.validator     = new core::Validator();
         this->m_internals.vm            = new core::VirtualMachine();
+        this->m_internals.vm->initialize();
 
         if (addLibStd)
             lib::libstd::registerFunctions(*this);

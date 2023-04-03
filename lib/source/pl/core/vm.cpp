@@ -37,8 +37,10 @@
 #endif
 
 #define COMPARE_CASE(op, operation) \
-    case op: { \
-        stack.push(compareValues(stack.pop(), stack.pop(), operation)); \
+    case op: {                      \
+        auto b = stack.pop();       \
+        auto a = stack.pop();       \
+        stack.push(compareValues(a, b, operation)); \
         break; \
     }
 
@@ -75,6 +77,12 @@ u32 getNextPalletColor() {
     colorIndex = (colorIndex + 1) % Palette.size();
 
     return Palette[index];
+}
+
+void VirtualMachine::initialize() {
+    this->m_addressValue = newValue();
+    this->m_addressValue->setValue((u128) 0);
+    this->m_address.set(std::get_if<u128>(&this->m_addressValue->m_value));
 }
 
 bool VirtualMachine::readValue(Operand type, TypeId id, bool next) {
@@ -212,7 +220,8 @@ void VirtualMachine::loadBytecode(Bytecode bytecode) {
     this->m_staticNames = {
         .thisName = this->m_symbolTable.newString(this_name),
         .mainName = this->m_symbolTable.newString(main_name),
-        .globalName = this->m_symbolTable.newString("main")
+        .globalName = this->m_symbolTable.newString("main"),
+        .addressName = this->m_symbolTable.newString(address_name),
     };
     this->m_functions = bytecode.getFunctions();
     colorIndex = 0;
@@ -293,7 +302,7 @@ void VirtualMachine::reset() {
     this->m_functions.clear();
     this->m_staticNames = {};
     this->result = nullptr;
-    this->m_address = 0;
+    this->m_address = static_cast<u128>(0);
     this->m_patterns.clear();
 }
 
@@ -352,12 +361,20 @@ void VirtualMachine::step() {
             break;
         case STORE_LOCAL: {
             auto &index = operands[0];
+            if(index == m_staticNames.addressName) {
+                m_addressValue->setValue(stack.pop()->toUnsigned());
+                break;
+            }
             //auto &typeName = instruction.operands[1];
             locals[index] = stack.pop();
             break;
         }
         case LOAD_LOCAL: {
             auto &index = operands[0];
+            if(index == m_staticNames.addressName) {
+                stack.push(m_addressValue);
+                break;
+            }
             if(!locals.contains(index))
                 err::E0003.throwError(fmt::format("No variable named '{}' found.", lookupString(index)), {}, 0);
             stack.push(locals[index]);
@@ -477,7 +494,7 @@ void VirtualMachine::step() {
             auto array = newValue();
             StaticArray a = {value, operands[0], static_cast<u16>(size)};
             array->setValue(a);
-            array->address = this->m_address - value->size;
+            array->address = this->m_address - static_cast<u128>(value->size);
             array->size = value->size * size;
             stack.push(array);
             break;
@@ -551,7 +568,7 @@ void VirtualMachine::accessData(u64 address, void *buffer, size_t size, u64 sect
 }
 
 template<typename A, typename B>
-bool VirtualMachine::compare(const A &a, const B &b, VirtualMachine::Condition condition) {
+static bool compare(const A &a, const B &b, Condition condition) {
     switch (condition) {
         case Condition::EQUAL:
             return a == b;
@@ -568,7 +585,28 @@ bool VirtualMachine::compare(const A &a, const B &b, VirtualMachine::Condition c
     }
 }
 
-Value VirtualMachine::compareValues(const Value& b, const Value& a, Condition condition) {
+template <typename T>
+concept Integer = std::is_integral_v<T>;
+template <Integer A, Integer B>
+bool static signedCompare(const A &a, const B &b, Condition condition) {
+    switch (condition) {
+        case Condition::EQUAL:
+            return std::cmp_equal(a, b);
+        case Condition::NOT_EQUAL:
+            return std::cmp_not_equal(a, b);
+        case Condition::LESS:
+            return std::cmp_less(a, b);
+        case Condition::LESS_EQUAL:
+            return std::cmp_less_equal(a, b);
+        case Condition::GREATER:
+            return std::cmp_greater(a, b);
+        case Condition::GREATER_EQUAL:
+            return std::cmp_greater_equal(a, b);
+    }
+    return false;
+}
+
+Value VirtualMachine::compareValues(const Value& a, const Value& b, Condition condition) {
     auto res = newValue();
     if(UNLIKELY(a == b)) { // same object
         res->setValue(true);
@@ -594,11 +632,18 @@ Value VirtualMachine::compareValues(const Value& b, const Value& a, Condition co
                 break;
         }
     } else { // symbolic comparison
-        /*bool result = std::visit(wolv::util::overloaded {
+        bool result = std::visit(wolv::util::overloaded {
+            [&condition](u128 a, i128 b) {
+                return signedCompare(a, b, condition);
+            },
+            [&condition](i128 a, u128 b) {
+                return signedCompare(a, b, condition);
+            },
             [](auto&, auto&) {
                 return false;
             }
-        }, a->m_value, b->m_value);*/
+        }, a->m_value, b->m_value);
+        res->setValue(result);
         return res;
     }
 

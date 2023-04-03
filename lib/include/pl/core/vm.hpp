@@ -2,9 +2,10 @@
 #include <map>
 #include <vector>
 #include <stack>
+#include <variant>
 
-#include "pl/core/bytecode/bytecode.hpp"
-#include "pl/core/vm/value.hpp"
+#include <pl/core/bytecode/bytecode.hpp>
+#include <pl/core/vm/value.hpp>
 
 namespace pl::core {
 
@@ -19,6 +20,35 @@ namespace pl::core {
         return std::move(pattern);
     }
 
+    template <typename T>
+    struct Reference {
+        explicit Reference(T* ptr) : ptr(ptr) {}
+
+        T& operator*() const { return *ptr; }
+        T* operator->() const { return ptr; }
+        T operator+=(T other) { return *ptr += other; }
+        T operator-=(T other) { return *ptr -= other; }
+        T operator+(T other) { return *ptr + other; }
+        T operator-(T other) { return *ptr - other; }
+        T operator++() { return ++(*ptr); }
+        T operator--() { return --(*ptr); }
+        T operator++(int) { return (*ptr)++; }
+        T operator--(int) { return (*ptr)--; }
+        Reference& operator=(T other) { *ptr = other; return *this; }
+        Reference& operator=(const Reference& other) { *ptr = *other.ptr; return *this; }
+        bool operator<=>(const Reference& other) const {
+            return *ptr <=> *other.ptr;
+        }
+
+        [[nodiscard]] T get() const { return *ptr; }
+        void set(T* value) { ptr = value; }
+
+        operator T() const { return *ptr; }
+
+        private:
+            T* ptr;
+    };
+
     enum BitfieldOrder {
         LSB,
         MSB
@@ -29,6 +59,15 @@ namespace pl::core {
         BitfieldOrder defaultBitfieldOrder = BitfieldOrder::LSB;
     };
 
+    enum Condition {
+        EQUAL,
+        NOT_EQUAL,
+        LESS,
+        LESS_EQUAL,
+        GREATER,
+        GREATER_EQUAL
+    };
+
     class VirtualMachine {
     public:
 
@@ -37,6 +76,7 @@ namespace pl::core {
             std::function<void(u64, const u8*, size_t)> write;
         };
 
+        void initialize();
         void run();
         void step();
         void enterMain();
@@ -88,9 +128,9 @@ namespace pl::core {
 
         [[nodiscard]] LogConsole& getConsole() { return this->m_console; }
 
-        u64& dataOffset() { return this->m_address; }
+        u128& dataOffset() { return *this->m_address; }
 
-        [[nodiscard]] std::optional<u64> getCurrentArrayIndex() const { return this->m_currentArrayIndex; }
+        [[nodiscard]] u64 getCurrentArrayIndex() const { return this->m_frame->arrayState.index; }
         void setCurrentArrayIndex(u64 index) { this->m_currentArrayIndex = index; }
 
         u64 getDataBaseAddress() const { return this->m_dataBaseAddress; }
@@ -166,6 +206,7 @@ namespace pl::core {
             SymbolId thisName;
             SymbolId mainName;
             SymbolId globalName;
+            SymbolId addressName;
         };
 
         void callFunction(SymbolId name) {
@@ -196,36 +237,26 @@ namespace pl::core {
             return stringSymbol->value;
         }
 
-        u64 m_address;
-        u64 m_dataSize;
-        u64 m_dataBaseAddress;
+        Reference<u128> m_address{nullptr};
+        Value m_addressValue;
+        u64 m_dataSize{};
+        u64 m_dataBaseAddress{};
         std::optional<u64> m_currentArrayIndex;
-        Frame* m_frame;
-        StaticNames m_staticNames;
+        Frame* m_frame{};
+        StaticNames m_staticNames{};
         Stack<Frame*> m_frames;
         instr::SymbolTable m_symbolTable;
         std::vector<instr::Bytecode::Function> m_functions;
-        instr::Bytecode::Function m_function;
+        instr::Bytecode::Function m_function{};
         std::vector<std::unique_ptr<ptrn::Pattern>> m_patterns;
-        std::endian m_endian;
-        BitfieldOrder m_bitfieldOrder;
+        std::endian m_endian{};
+        BitfieldOrder m_bitfieldOrder{};
         VMSettings m_settings;
         Value result;
-        bool m_running;
+        bool m_running{};
         IOOperations m_io;
         LogConsole m_console;
 
-        enum Condition {
-            EQUAL,
-            NOT_EQUAL,
-            LESS,
-            LESS_EQUAL,
-            GREATER,
-            GREATER_EQUAL
-        };
-
-        template <typename A, typename B>
-        static bool compare(const A& a, const B& b, Condition condition);
-        static Value compareValues(const Value& b, const Value& a, Condition condition);
+        static Value compareValues(const Value& a, const Value& b, Condition condition);
     };
 }

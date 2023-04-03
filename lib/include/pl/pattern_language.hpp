@@ -35,7 +35,6 @@ namespace pl {
         class Lexer;
         class Parser;
         class Validator;
-        class Evaluator;
 
         namespace ast { class ASTNode; }
     }
@@ -58,7 +57,6 @@ namespace pl {
             core::Lexer           *lexer;
             core::Parser          *parser;
             core::Validator       *validator;
-            core::Evaluator       *evaluator;
             core::VirtualMachine *vm;
         };
 
